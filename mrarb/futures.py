@@ -75,7 +75,7 @@ class FuturesConfig:
     carry_sd: float = 8e-5                  # stationary sd of carry
     carry_hl: float = 120.0
     basis_hl_range: tuple = (8.0, 18.0)
-    basis_sigma_range: tuple = (0.002, 0.005)
+    basis_sigma_range: tuple = (0.004, 0.008)   # calibrated to real calendar-spread vol
     struct_sigma_range: tuple = (0.0015, 0.003)
     cross_hl_range: tuple = (10.0, 25.0)
     cross_sigma_range: tuple = (0.006, 0.012)
@@ -345,14 +345,26 @@ def rollover_block(u: FuturesUniverse, warmup: int = 2) -> np.ndarray:
 
 
 def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
-                  cost_mult: float = 1.0):
+                  cost_mult: float = 1.0, margin_target: float | None = None,
+                  lev_cap: float = 4.0):
     """OU point-in-time signals + lot accounting for one spread slot.
 
-    Returns (daily return series, pos, trade cost share info dict).
+    ``margin_target``: if set, scale the slot's position so that in-market
+    margin usage ≈ this fraction of the slot capital (standard futures
+    margin-based sizing; Sharpe is scale-invariant, absolute PnL is not).
+    Leverage is capped at ``lev_cap``.
+
+    Returns (daily return series, pos, info dict with leverage/margin).
     """
     T = u.cfg.n_days
     block = rollover_block(u)
-    if params.mode == "rolling":
+    # 'auto': calendar spreads have a stable mean (carry x fixed tau gap) ->
+    # OU z; cross-commodity spread means drift (relative basis, alpha estimated
+    # once) -> rolling z adapts faster. Chosen per slot, not per strategy.
+    eff_mode = params.mode
+    if params.mode == "auto":
+        eff_mode = "rolling" if slot.kind == "cross" else "ou"
+    if eff_mode == "rolling":
         z = _rolling_z(pd.Series(slot.spread), params.window)
     else:
         z = ou_z_point_in_time(slot.spread, params)
@@ -377,7 +389,7 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
 
     pnl = np.zeros(T)
     turnover_pos = np.zeros(T)
-    margin_frac = np.zeros(T)
+    margin_series = np.zeros(T)   # in-market margin per unit capital, day t
     prev = 0
     for t in range(1, T):
         p = pos[t - 1]
@@ -388,13 +400,23 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
             cost = turnover_pos[t] * (lots_far * (fee_far + slip_far) + lots_near * (fee_near + slip_near))
             pnl[t] -= cost * cost_mult
         prev = p
-        # margin usage relative to the CURRENT single-leg notional
-        cap_t = max(1.0, lots_near * mult_near * _price_at(u, slot, t, "near"))
-        margin_frac[t] = (lots_far * mult_far * _price_at(u, slot, t, "far") * _margin_rate(u, slot, "far")
-                          + lots_near * mult_near * _price_at(u, slot, t, "near") * _margin_rate(u, slot, "near")) / cap_t
+        if p != 0:            # margin is only posted while in the market
+            cap_t = max(1.0, lots_near * mult_near * _price_at(u, slot, t, "near"))
+            margin_series[t] = (
+                lots_far * mult_far * _price_at(u, slot, t, "far") * _margin_rate(u, slot, "far")
+                + lots_near * mult_near * _price_at(u, slot, t, "near") * _margin_rate(u, slot, "near")) / cap_t
+
+    held = np.zeros(T, dtype=bool)
+    held[1:] = pos[:-1] != 0
+    avg_margin = float(margin_series[held].mean()) if held.any() else np.nan
+    lev = 1.0
+    if margin_target is not None and np.isfinite(avg_margin) and avg_margin > 0:
+        lev = float(min(lev_cap, margin_target / avg_margin))
+        pnl = pnl * lev      # linear in lots: fees and slippage scale identically
 
     ret = pd.Series(pnl / slot.cap, index=pd.RangeIndex(T))
-    return ret, pos, {"avg_margin_frac": float(np.nanmean(margin_frac))}
+    return ret, pos, {"avg_margin_frac": avg_margin, "leverage": lev,
+                      "margin_series": margin_series, "held": held}
 
 
 def _leg_pnl(u: FuturesUniverse, c: int, offset: int) -> np.ndarray:

@@ -8,7 +8,7 @@
 - **中国商品期货管道**(`frun.py`):期限结构 + carry + 换月 + 手数/乘数/手续费/保证金账户层,跨期 + 跨品种价差语义,**算法自动发现价差,不预设品种**。
 
 ```bash
-# 期货版(中国商品期货语义)
+# 期货版(中国商品期货语义: 期限结构+换月+手数化账户, 算法自动发现价差)
 .venv/bin/python frun.py --seed 11            # 单次全流程
 .venv/bin/python frun.py --mc 8 --seed 11     # Monte Carlo
 
@@ -19,6 +19,8 @@
 # 自定义宇宙规模
 .venv/bin/python run.py --seed 42 --days 2000 --assets 50 --pairs 8
 ```
+
+> 期货版 MC 结果(8 宇宙样本外,含手续费/滑点/换月/保证金约束):**四种配置全部 8/8 宇宙盈利**,平均年化 ~13–14%,最差宇宙 +5% 以上,平均回撤 -3.5%。详见 [docs/05](docs/05-futures.md)。
 
 输出保存在 `output/`:`universe_sample.png`(宇宙与断裂配对)、`signals_best_pair.png`(价差 / OU 带 / z-score 入场)、`equity_curves.png`(四策略净值)、`mc_oos_sharpe.png` 与 `mc_results.csv`(Monte Carlo)。
 
