@@ -138,20 +138,39 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
 
     if verbose:
         n_struct = int((~u.healthy).sum())
+        n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
         print("\n" + "=" * 76)
         print(f"期货合成宇宙: {u.n_com} 个品种 / {cfg.n_days} 天 / 种子 {cfg.seed}")
-        print(f"期限结构: 到期日间隔 {cfg.expiry_step} 天, 近月剩余 {cfg.roll_buffer} 天时换月; "
-              f"{int(u.healthy.sum())} 个品种价差健康, {n_struct} 个品种基素随机游走(算法需自行剔除)")
-        print(f"植入跨品种协整对: {len(u.planted_cross)} 个 (ground truth)")
+        print(f"合约带: 各品种独立到期间隔(30-60天错开) + ~{cfg.listing_span} 天挂牌窗口, "
+              f"任意时刻同时挂牌多个合约")
+        print(f"移仓换月: 主力 = 滚动成交量最大者(5日平滑), 主力切换即换月 — "
+              f"样本内各品种换月 {min(n_rolls)}~{max(n_rolls)} 次")
+        print(f"{int(u.healthy.sum())} 个品种价差健康, {n_struct} 个品种基素随机游走(算法需自行剔除); "
+              f"植入跨品种协整对 {len(u.planted_cross)} 个")
         print(f"训练期 [0, {train_end})  测试期 [{train_end}, {cfg.n_days})")
-        print(f"候选池: {len(rows)} 个价差, 真回归 {sum(r['is_true'] for r in rows)} 个")
+        print(f"候选池: {len(rows)} 个价差 (跨期 {sum(r['kind']=='cal' for r in rows)}"
+              f" + 跨品种 {sum(r['kind']=='cross' for r in rows)}), 真回归 {sum(r['is_true'] for r in rows)} 个")
+
+        spec_df = pd.DataFrame([{
+            "品种": s.code, "乘数": s.multiplier, "跳价": s.tick,
+            "手续费": f"{s.fee_per_lot}元/手" if s.fee_per_lot else f"{s.fee_rate*1e4:.1f}万分比",
+            "保证金%": round(100 * s.margin_rate),
+            "到期间隔天": s.expiry_step,
+            "活跃度(万手/日)": round(s.activity / 1e4, 1),
+            "换月次数": n_rolls[c],
+            "价差健康": s.healthy_term,
+        } for c, s in enumerate(u.specs)])
+        print("\n--- 品种规格(仿真量级,真实世界形状)---")
+        print(spec_df.to_string(index=False))
         if slots:
             sel_df = pd.DataFrame([{
                 "入选": s.label, "类型": s.kind, "p值": f"{s.adf_or_eg_p:.2e}",
                 "半衰期": round(s.half_life, 1), "手数A:B": f"{s.lots_a}:{s.lots_b}",
+                "换月次数": s.roll_count,
+                "腿部均量(万手)": round(s.liq / 1e4, 1),
                 "真回归": s.is_true,
             } for s in slots])
-            print(f"\n--- 算法发现(仅训练期筛选, ≤{cfg.max_slots} 槽) ---")
+            print(f"\n--- 算法发现(仅训练期: 平稳性+稳定性+半衰期+流动性门槛, ≤{cfg.max_slots} 槽) ---")
             print(sel_df.to_string(index=False))
             n_true_sel = sum(s.is_true for s in slots)
             print(f"发现质量: {n_true_sel}/{len(slots)} 槽为真回归")
@@ -213,6 +232,7 @@ def report_slots(res):
             "训练夏普": round(ts["train_sharpe"], 2) if np.isfinite(ts["train_sharpe"]) else np.nan,
             "杠杆x": round(ts["leverage"], 1),
             "利用率%": round(100 * ts["utilization"], 0),
+            "换月次数": s.roll_count,
             "OOS夏普": round(ts["sharpe"], 2),
             "OOS年化%": round(100 * ts["ann_ret"], 2),
             "OOS回撤%": round(100 * ts["max_dd"], 2),
@@ -233,14 +253,17 @@ def plot_term_structure(res, outdir):
     for c, title in ((c_healthy, "HEALTHY commodity"), (c_struct, "STRUCTURAL (basis = random walk)")):
         ax = axes[0 if c == c_healthy else 1]
         for t in t_snap:
-            jnear = u.near_idx[t]
-            mask = u.tau[:, t] > 0
-            basis = u.logF[mask, t, c] - u.logF[jnear, t, c]   # vs active near
-            ax.plot(u.tau[mask, t] - u.tau[jnear, t], basis, marker="o", ms=3,
+            dom = u.rank_idx[0, t, c]                      # volume-dominant contract
+            if dom < 0:
+                continue
+            listed = np.isfinite(u.logF[c, :, t])
+            js = np.where(listed)[0]
+            basis = u.logF[c, js, t] - u.logF[c, dom, t]   # vs volume-dominant
+            ax.plot(u.tau[c, js, t] - u.tau[c, dom, t], basis, marker="o", ms=3,
                     lw=0.9, label=f"t={t}")
         ax.axhline(0, color="grey", lw=0.8)
-        ax.set_title(f"Basis curve of {u.specs[c].code} vs active near contract ({title})")
-        ax.set_xlabel("calendar spread distance (days beyond near contract)")
+        ax.set_title(f"Basis curve of {u.specs[c].code} vs volume-dominant contract ({title})")
+        ax.set_xlabel("expiry distance from the dominant contract (days)")
         ax.set_ylabel("log basis")
         ax.legend(fontsize=8)
     fig.tight_layout()
@@ -254,13 +277,14 @@ def plot_spread_signals(res, outdir):
     if not detail:
         return
     s, pos, _ret, _ts = detail[0]
-    if s.kind in ("cal1", "cal2"):
-        title = f"{u.specs[s.com[0]].code} calendar gap-{1 if s.kind == 'cal1' else 2} spread"
+    if s.kind == "cal":
+        title = (f"{u.specs[s.com[0]].code} calendar spread "
+                 f"vol-rank {s.ranks[0]}~{s.ranks[1]}")
     else:
-        title = f"{u.specs[s.com[1]].code}~{u.specs[s.com[0]].code} cross-commodity spread"
+        title = f"{u.specs[s.com[1]].code}~{u.specs[s.com[0]].code} cross (dominant legs)"
     fig, axes = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
     axes[0].plot(s.spread, lw=0.8, color="darkgreen")
-    for r in np.where(u.roll_days)[0]:
+    for r in np.where(u.roll_days[s.com[0]])[0]:
         for ax in axes:
             ax.axvline(r, color="grey", lw=0.3, alpha=0.5)
     axes[0].axvline(train_end, color="red", ls="--", lw=1)
