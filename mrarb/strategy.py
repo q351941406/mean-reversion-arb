@@ -32,6 +32,50 @@ def _rolling_z(spread: pd.Series, window: int) -> np.ndarray:
     return ((spread - m) / sd).values
 
 
+def position_from_z(z, params: StratParams, max_hold: int,
+                    block=None) -> np.ndarray:
+    """Shared position state machine.
+
+    Enter at |z|>=z_entry, exit at |z|<=z_exit, stop at |z|>=z_stop or after
+    max_hold days. Stops/timeouts disarm until z re-enters the entry band.
+    ``block[t]`` forces flat on day t (used for futures rollover windows) and
+    re-arms the pair.
+    """
+    z = np.asarray(z, dtype=float)
+    T = len(z)
+    pos = np.zeros(T, dtype=int)
+    cur, hold, armed = 0, 0, True
+    for t in range(T):
+        if block is not None and block[t]:
+            cur, hold, armed = 0, 0, True
+            pos[t] = 0
+            continue
+        zt = z[t]
+        if np.isnan(zt):
+            if cur != 0:                      # no signal available: keep position
+                hold += 1                     # but still honor the holding stop
+                if hold >= max_hold:
+                    cur, armed = 0, False
+            pos[t] = cur
+            continue
+        if cur == 0:
+            if not armed and abs(zt) < params.z_entry:
+                armed = True
+            if armed:
+                if zt <= -params.z_entry:
+                    cur, hold = 1, 0
+                elif zt >= params.z_entry:
+                    cur, hold = -1, 0
+        else:
+            hold += 1
+            if abs(zt) >= params.z_stop:
+                cur, armed = 0, False         # stopped out: wait for re-entry
+            elif abs(zt) <= params.z_exit or hold >= max_hold:
+                cur, armed = 0, abs(zt) <= params.z_exit
+        pos[t] = cur
+    return pos
+
+
 def _ou_z_point_in_time(spread: np.ndarray, params: StratParams) -> np.ndarray:
     """z = (S - mu_OU) / sigma_eq, refit every `refit_every` days on a
     trailing `refit_window` window (or a static train fit if refit_every=0)."""
@@ -47,6 +91,10 @@ def _ou_z_point_in_time(spread: np.ndarray, params: StratParams) -> np.ndarray:
         if ou.valid:
             z[t] = (spread[t] - ou.mu) / ou.sigma_eq
     return z
+
+
+# public alias for reuse by the futures pipeline
+ou_z_point_in_time = _ou_z_point_in_time
 
 
 def compute_signals(prices: pd.DataFrame, pair: SelectedPair,
@@ -76,36 +124,8 @@ def compute_signals(prices: pd.DataFrame, pair: SelectedPair,
     else:
         raise ValueError(f"unknown mode {params.mode!r}")
 
-    # position rule: enter at |z|>=z_entry, exit at |z|<=z_exit, stop at
-    # |z|>=z_stop or after hold_mult*half-life days. A stop (or timeout)
-    # disarms the pair until z re-enters the entry band - otherwise a
-    # diverging spread would be re-entered every day after the stop.
-    pos = np.zeros(T, dtype=int)
-    cur, hold, armed = 0, 0, True
+    # position rule implemented in the shared state machine
     max_hold = int(np.ceil(params.hold_mult * pair.half_life))
-    for t in range(T):
-        zt = z[t]
-        if np.isnan(zt):
-            if cur != 0:                      # no signal available: keep position
-                hold += 1                     # but still honor the holding stop
-                if hold >= max_hold:
-                    cur, armed = 0, False
-            pos[t] = cur
-            continue
-        if cur == 0:
-            if not armed and abs(zt) < params.z_entry:
-                armed = True
-            if armed:
-                if zt <= -params.z_entry:
-                    cur, hold = 1, 0
-                elif zt >= params.z_entry:
-                    cur, hold = -1, 0
-        else:
-            hold += 1
-            if abs(zt) >= params.z_stop:
-                cur, armed = 0, False         # stopped out: wait for re-entry
-            elif abs(zt) <= params.z_exit or hold >= max_hold:
-                cur, armed = 0, abs(zt) <= params.z_exit
-        pos[t] = cur
+    pos = position_from_z(z, params, max_hold)
 
     return PairSignals(spread=spread, z=z, pos=pos, ou=ou)

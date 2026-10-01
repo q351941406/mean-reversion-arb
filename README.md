@@ -1,12 +1,19 @@
 # 均值回归套利模型(基于合成数据)
 
-没有真实数据也能完整研究均值回归(配对/统计套利)策略:**程序合成一个带"已知答案"的股票宇宙 → 在上面做配对筛选、OU 建模、回测、稳健性检验**,最后只需要把真实价格 CSV 接进同一个接口即可迁移。
+没有真实数据也能完整研究均值回归(配对/统计套利)策略:**程序合成一个带"已知答案"的市场 → 在上面做价差筛选、OU 建模、回测、稳健性检验**,最后只需要把真实价格数据接进同一个接口即可迁移。
+
+两个沙盘:
+
+- **股票式配对管道**(`run.py`):因子模型 + 植入协整对 + 制度断裂,跨品种股票配对语义;
+- **中国商品期货管道**(`frun.py`):期限结构 + carry + 换月 + 手数/乘数/手续费/保证金账户层,跨期 + 跨品种价差语义,**算法自动发现价差,不预设品种**。
 
 ```bash
-# 单次全流程(合成宇宙 + 质量报告 + 筛选 + 4 种策略对比 + 图表)
-.venv/bin/python run.py --seed 7
+# 期货版(中国商品期货语义)
+.venv/bin/python frun.py --seed 11            # 单次全流程
+.venv/bin/python frun.py --mc 8 --seed 11     # Monte Carlo
 
-# Monte Carlo:跨 12 个合成宇宙检验稳健性
+# 股票式(方法论验证沙盘)
+.venv/bin/python run.py --seed 7
 .venv/bin/python run.py --mc 12
 
 # 自定义宇宙规模
@@ -23,6 +30,7 @@
 | [02 · 方法论](docs/02-methodology.md) | 合成器数学设定、OU 校准推导、Kalman 对冲、交易规则状态机、回测口径 |
 | [03 · 实验记录](docs/03-experiments.md) | 全部实测结果、Monte Carlo 汇总、开发中的三个教训(含踩坑细节) |
 | [04 · 真实数据接入](docs/04-real-data-guide.md) | 十分钟接入真实数据、合成器校准、升级路线与实盘 checklist |
+| [05 · 期货化](docs/05-futures.md) | 中国商品期货语义:期限结构/换月/手数化账户、跨期+跨品种算法发现、期货版实验结果 |
 
 ## 文献依据(arXiv)
 
@@ -114,12 +122,14 @@ stats = perf_stats(portfolio_return(rets).iloc[train_end:])
 ```
 mrarb/
   config.py      # 宇宙/策略/回测参数(dataclass)
-  synth.py       # 合成宇宙:因子模型 + 植入协整对 + 制度断裂
+  synth.py       # 合成宇宙:因子模型 + 植入协整对 + 制度断裂(股票式)
   validate.py    # stylized facts 质量报告
   selection.py   # MSD 筛选 + 双向 Engle-Granger + 半衰期过滤
   ou.py          # OU AR(1) 校准 + Kalman 动态对冲比率
-  strategy.py    # 价差/z-score/仓位规则(点内,无前视)
+  strategy.py    # 价差/z-score/仓位状态机(点内,无前视)
   backtest.py    # 次日执行回测 + 绩效/逐笔统计
-run.py           # 单次流程 & Monte Carlo 入口(CLI)
+  futures.py     # 期货化:期限结构/换月合成器 + 跨期跨品种发现 + 手数化回测
+run.py           # 股票式管道入口(CLI)
+frun.py          # 期货管道入口(CLI)
 output/          # 图表与 MC 结果
 ```
