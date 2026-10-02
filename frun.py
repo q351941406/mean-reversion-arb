@@ -48,14 +48,23 @@ VOL_CAP = 0.15         # per-slot capital vol cap (annualized, train-estimated)
 # threshold grid, tuned on the TRAIN window per universe
 # ('auto' = OU z for calendar spreads (stable mean) + rolling z for cross
 #  spreads (drifting mean), decided per slot by spread type)
+# deseasonal=True variants use refit_window=500: identifying a 365-day
+# cycle needs a window that covers the period (250d was proven ill-posed,
+# see docs/06 §3). The tuner decides per universe via train Sharpe.
 GRID = ([dict(mode="ou", z_entry=e, z_exit=x, refit_every=re_, refit_window=rw)
          for e in (1.25, 1.75, 2.25)
          for x in (0.0, 0.5)
          for (re_, rw) in ((60, 250), (20, 120))]
+        + [dict(mode="ou", z_entry=e, z_exit=x, refit_every=60, refit_window=500,
+                deseasonal=True)
+           for e in (1.25, 1.75, 2.25) for x in (0.0, 0.5)]
         + [dict(mode="rolling", window=w, z_entry=e, z_exit=0.5)
            for w in (20, 30, 40) for e in (1.25, 1.75)]
         + [dict(mode="auto", z_entry=e, z_exit=x, refit_every=60, refit_window=250)
-           for e in (1.5, 1.75, 2.0) for x in (0.0, 0.5)])
+           for e in (1.5, 1.75, 2.0) for x in (0.0, 0.5)]
+        + [dict(mode="auto", z_entry=e, z_exit=0.5, refit_every=60, refit_window=500,
+                deseasonal=True)
+           for e in (1.5, 1.75)])
 
 
 def make_params(**kw) -> StratParams:
@@ -550,14 +559,14 @@ def main():
         print(f"样本数据已写入 {args.data_dir}/ (specs/contracts/prices/volume.csv)\n"
               f"验证: .venv/bin/python frun.py --provider csv --data-dir {args.data_dir}")
         return
-    if args.mc > 0:
-        run_monte_carlo(args)
-        return
     if args.hostile:
         run_hostile(args)
         return
     if args.sweep:
         run_sweep(args)
+        return
+    if args.mc > 0:
+        run_monte_carlo(args)
         return
 
     cfg = FuturesConfig(seed=args.seed, n_days=args.days)

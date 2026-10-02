@@ -27,7 +27,7 @@ from statsmodels.tsa.stattools import adfuller, coint
 from .config import StratParams
 from .data import DataProvider, FuturesDataset
 from .ou import fit_ou
-from .strategy import _rolling_z, ou_z_point_in_time, position_from_z
+from .strategy import _rolling_z, ou_z_point_in_time, ou_z_seasonal, position_from_z
 from .synth import _garch_t_innovations, _simulate_ou_spread, _with_jumps
 
 # code, sector, multiplier, tick, fee_per_lot or None, fee_rate, margin,
@@ -185,7 +185,14 @@ def _hostile_basis(rng, T: int, cfg: FuturesConfig, sigma_eq: float) -> np.ndarr
             out[t] = a * out[t - 1] + eps[t]
         return out
     if mode == "seasonal":
-        # OU around a moving seasonal mean: static-mu z-scores are biased
+        # REAL seasonality is modelled in carry (see _simulate_panel): the
+        # annual storage cycle moves the whole curve with one learnable
+        # phase. The basis itself stays a plain OU here.
+        return _simulate_ou_spread(rng, T, kappa, sigma_eq)
+    if mode == "phaseshift":
+        # UNLEARNABLE mean shifts: each contract generation re-randomizes the
+        # sinusoid phase (the old, flawed "seasonal" mode - kept as the
+        # strongest adversarial case; no static model can track it)
         base = _simulate_ou_spread(rng, T, kappa, sigma_eq)
         amp = rng.uniform(0.004, 0.009)
         phi = rng.uniform(0.0, 2.0 * np.pi)
@@ -255,6 +262,14 @@ def _simulate_panel(cfg: FuturesConfig):
     for c in range(n_com):
         mu = rng.uniform(*cfg.carry_mu_range)
         carry[c] = mu + _simulate_ou_spread(rng, T, np.log(2.0) / cfg.carry_hl, cfg.carry_sd)
+    if cfg.adversarial == "seasonal":
+        # real annual seasonality: storage cycle in NET CARRY, one phase per
+        # commodity shared by ALL its contracts (learnable across rolls);
+        # amplitude tuned so calendar-spread seasonality ~ basis noise scale
+        for c in range(n_com):
+            amp = rng.uniform(1.0e-4, 2.5e-4)
+            phi = rng.uniform(0.0, 2.0 * np.pi)
+            carry[c] = carry[c] + amp * np.sin(2.0 * np.pi * np.arange(T) / 365.0 + phi)
     basis = np.empty((n_com, n_mat, T))
     for c in range(n_com):
         for j in range(n_mat):
@@ -762,6 +777,8 @@ def slot_positions(u: FuturesUniverse, slot: SpreadSlot, params: StratParams):
         eff_mode = "rolling" if slot.kind in ("cross", "combo") else "ou"
     if eff_mode == "rolling":
         z = _rolling_z(pd.Series(slot.spread_adj), params.window)
+    elif params.deseasonal:
+        z = ou_z_seasonal(slot.spread_adj, params)
     else:
         z = ou_z_point_in_time(slot.spread_adj, params)
     max_hold = int(np.ceil(params.hold_mult * slot.half_life))

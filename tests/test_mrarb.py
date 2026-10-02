@@ -24,6 +24,7 @@ from mrarb.config import StratParams
 from mrarb.futures import (FuturesConfig, FuturesUniverse, _back_adjust,
                            _compute_dominance, backtest_slot, build_universe,
                            screen_candidates, simulate_futures, slot_positions)
+from mrarb.strategy import ou_z_point_in_time, ou_z_seasonal
 from mrarb.portfolio import (benjamini_hochberg, deflated_sharpe,
                              enforce_net_cap, erc_weights, leg_exposure,
                              net_exposure, risk_contributions)
@@ -206,6 +207,26 @@ class TestPortfolio(unittest.TestCase):
         dsr_100 = deflated_sharpe(r, many)
         self.assertTrue(0.0 <= dsr_1 <= 1.0)
         self.assertGreaterEqual(dsr_1, dsr_100)
+
+    def test_seasonal_z_removes_seasonal_mean(self):
+        """Hostile-experiment fix: on a purely seasonal spread the Fourier
+        de-seasonalized z must be near zero while the plain OU z oscillates."""
+        rng = np.random.default_rng(2)
+        T = 800
+        tt = np.arange(T, dtype=float)
+        s = 0.006 * np.sin(2.0 * np.pi * tt / 365.0) + rng.normal(0, 0.0002, T)
+        params = StratParams(mode="ou", refit_window=400, refit_every=60)
+        z_seas = ou_z_seasonal(s, params)
+        z_plain = ou_z_point_in_time(s, params)
+
+        def ac1(x):
+            x = pd.Series(x).dropna()
+            return float(np.corrcoef(x[:-1], x[1:])[0, 1])
+
+        # the trading-relevant property: the de-seasonalized z must be fast-
+        # reverting (low persistence) while the plain z rides a ~365d wave
+        self.assertLess(ac1(z_seas), 0.5)
+        self.assertGreater(ac1(z_plain), 0.9)
 
     def test_bh(self):
         self.assertEqual(benjamini_hochberg([0.001, 0.002, 0.5, 0.9], q=0.1), 2)

@@ -93,6 +93,49 @@ def _ou_z_point_in_time(spread: np.ndarray, params: StratParams) -> np.ndarray:
     return z
 
 
+def ou_z_seasonal(spread, params: StratParams):
+    """OU z-score with a Fourier seasonal mean removed (point-in-time).
+
+    spread_t = mu + seasonal_t + OU residual, where seasonal_t is fit as
+    `seasonal_harmonics` sine/cosine pairs on a trailing refit_window.
+    Between refits the fitted coefficients are held and evaluated at the
+    current day index - deterministic time features, so this is causal by
+    construction. sigma_eq comes from the de-seasonalized residual.
+    Motivated by the hostile-generator experiment (docs/06 §3): a static mu
+    is systematically biased by seasonal means.
+    """
+    s = np.asarray(spread, dtype=float)
+    T = len(s)
+    z = np.full(T, np.nan)
+    w = params.refit_window
+    every = max(params.refit_every, 1)
+    period = params.seasonal_period
+    harm = max(params.seasonal_harmonics, 0)
+
+    def design(idx: np.ndarray) -> np.ndarray:
+        cols = [np.ones(len(idx))]
+        for k in range(1, harm + 1):
+            cols.append(np.sin(2.0 * np.pi * k * idx / period))
+            cols.append(np.cos(2.0 * np.pi * k * idx / period))
+        return np.column_stack(cols)
+
+    tt = np.arange(T, dtype=float)
+    coef, ou = None, None
+    for t in range(T):
+        if t >= w and (coef is None or (t - w) % every == 0):
+            idx = tt[t - w + 1: t + 1]
+            X = design(idx)
+            y = s[t - w + 1: t + 1]
+            m = np.isfinite(y)
+            if m.sum() >= 60:
+                coef, *_ = np.linalg.lstsq(X[m], y[m], rcond=None)
+                ou = fit_ou(y[m] - X[m] @ coef)
+        if coef is not None and ou is not None and ou.valid and np.isfinite(s[t]):
+            mu_t = float(design(tt[t:t + 1])[0] @ coef)
+            z[t] = (s[t] - mu_t) / ou.sigma_eq
+    return z
+
+
 # public alias for reuse by the futures pipeline
 ou_z_point_in_time = _ou_z_point_in_time
 

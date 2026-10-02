@@ -65,6 +65,14 @@ class StratParams:
     refit_window: int = 250
     kalman_delta: float = 1e-5
     kalman_r: float = 1e-2
+    deseasonal: bool = False            # Fourier seasonal-mean removal BEFORE
+                                        # the OU z. Off by default: identifying a
+                                        # 365d cycle from short windows is
+                                        # ill-posed and hurts non-seasonal
+                                        # spreads. The grid tuner turns it on
+                                        # only when train Sharpe says so.
+    seasonal_period: float = 365.0      # days per seasonal cycle
+    seasonal_harmonics: int = 2
 
 
 @dataclass
