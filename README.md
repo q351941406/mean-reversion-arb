@@ -21,7 +21,10 @@
 # 数据适配层(推荐 Parquet: 列式/体积1/3/dtype无损; CSV 为互操作格式)
 .venv/bin/python frun.py --export-sample --data-dir data/sample              # 导出 Parquet
 .venv/bin/python frun.py --provider parquet --data-dir data/sample          # 读回跑管道(逐位一致)
-# 真实数据: 按 docs/07 的格式放入 data/ 目录, --provider parquet 即可; 新数据源实现一个 load_dataset
+# 真实数据(同花顺fuyao规格+新浪深度历史, 需 FUYAO_API_KEY 环境变量):
+export FUYAO_API_KEY=sk-...   # .env 亦可, 已 gitignore
+.venv/bin/python frun.py --provider fuyao --data-dir data/fuyao               # 首次拉取并缓存 parquet
+.venv/bin/python frun.py --provider fuyao --data-dir data/fuyao               # 之后走缓存
 
 # 测试(14 项: PnL恒等式 / 扰动PIT不变性 / 组合层 / 数据适配器CSV+Parquet / LiveRunner)
 .venv/bin/python -m unittest tests.test_mrarb -v
@@ -42,6 +45,7 @@
 | [05 · 期货化](docs/05-futures.md) | 中国商品期货语义:期限结构/换月/手数化账户、三类价差(跨期/跨品种/三腿中性)算法发现、未来函数审计 |
 | [06 · 稳健性与测试](docs/06-robustness.md) | 正确性测试套件(PnL恒等式/扰动PIT检测)、组合层风控(净敞口/ERC)、敌意生成器实验、参数扫描、Deflated Sharpe |
 | [07 · 数据适配层](docs/07-data-adapters.md) | 数据契约与 Provider 接口、Parquet/CSV 格式规范、akshare 模板、实盘骨架(LiveRunner)——切换数据源 = 实现一个 load_dataset |
+| [08 · 第一次真实数据运行](docs/08-first-real-run.md) | fuyao+新浪混合源、真实数据 5 个坑、发现层命中经典价差、OOS 负结果的诚实记录 |
 
 ## 文献依据(arXiv)
 

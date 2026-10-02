@@ -84,11 +84,30 @@ def _ou_z_point_in_time(spread: np.ndarray, params: StratParams) -> np.ndarray:
     if params.refit_every <= 0:
         return z  # filled by caller with the static train fit
     w = params.refit_window
-    ou = fit_ou(spread[:w])
+    ou = fit_ou(spread[:w]) if np.isfinite(spread[:w]).all() else None
     for t in range(T):
         if t >= w and (t - w) % params.refit_every == 0:
-            ou = fit_ou(spread[t - w + 1: t + 1])
-        if ou.valid:
+            win = spread[t - w + 1: t + 1]
+            # real spreads have interior gaps: fit on the longest finite run,
+            # keep the previous parameters when the run is too short
+            fin = np.isfinite(win)
+            if fin.all():
+                cand = fit_ou(win)
+            else:
+                best_a, best_b, cur = 0, 0, None
+                for i, m in enumerate(fin):
+                    if m and cur is None:
+                        cur = i
+                    elif not m and cur is not None:
+                        if i - cur > best_b - best_a:
+                            best_a, best_b = cur, i
+                        cur = None
+                if cur is not None and len(fin) - cur > best_b - best_a:
+                    best_a, best_b = cur, len(fin)
+                cand = fit_ou(win[best_a:best_b]) if best_b - best_a >= 60 else None
+            if cand is not None and cand.valid:
+                ou = cand
+        if ou is not None and ou.valid and np.isfinite(spread[t]):
             z[t] = (spread[t] - ou.mu) / ou.sigma_eq
     return z
 

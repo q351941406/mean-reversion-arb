@@ -195,6 +195,15 @@ def true_count(slots) -> int:
 def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None):
     provider = provider or SyntheticProvider(cfg)
     ds = provider.load_dataset()
+    if getattr(provider, "name", "synthetic") != "synthetic":
+        # Real-market gate calibration - set from universe-scale priors
+        # (actual volumes, actual spread half-lives) BEFORE any PnL was seen:
+        # the synthetic defaults (stab 0.10, hl<=60d, thin-leg 30k lots) are
+        # sandbox-calibrated and over-reject real spreads.
+        import dataclasses
+        cfg = dataclasses.replace(cfg, listing_span=10 ** 6,
+                                  stability_th=0.30, hl_hi=150,
+                                  vol_floor_liq=1.0e4)
     u = build_universe(ds, cfg)
     cfg = u.cfg                            # n_days aligned to the actual panel
     train_end = int(u.n_days * cfg.train_fraction)
@@ -534,6 +543,11 @@ def make_provider(args):
     if args.provider == "akshare":
         from mrarb.data import AkshareProvider
         return AkshareProvider(args.data_dir)
+    if args.provider == "fuyao":
+        from mrarb.fuyao import FuyaoProvider
+        varts = args.fuyao_varieties.split(",") if args.fuyao_varieties else None
+        return FuyaoProvider(cache_dir=args.data_dir, varieties=varts,
+                             start=args.fuyao_start, refresh=args.refresh)
     raise ValueError(f"unknown provider {args.provider}")
 
 
@@ -542,8 +556,14 @@ def main():
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--days", type=int, default=1500)
     ap.add_argument("--mc", type=int, default=0)
-    ap.add_argument("--provider", choices=["synthetic", "csv", "parquet", "mock", "akshare"],
+    ap.add_argument("--provider", choices=["synthetic", "csv", "parquet", "mock", "akshare", "fuyao"],
                     default="synthetic", help="data source adapter (parquet recommended)")
+    ap.add_argument("--fuyao-varieties", type=str, default="",
+                    help="comma-separated variety codes for --provider fuyao (default: 12 majors)")
+    ap.add_argument("--fuyao-start", type=str, default="2023-04-01",
+                    help="sample start date for --provider fuyao")
+    ap.add_argument("--refresh", action="store_true",
+                    help="fuyao provider: re-download even if cache exists")
     ap.add_argument("--data-dir", type=str, default="data/sample")
     ap.add_argument("--export-sample", action="store_true",
                     help="write the synthetic dataset to --data-dir")

@@ -59,6 +59,12 @@ class FuturesConfig:
     vol_ar: float = 0.85           # AR(1) persistence of log-volume noise
     vol_noise_sd: float = 0.18
     roll_margin: float = 0.20      # challenger needs +20% volume to take dominance
+    pvalue_th: float = 0.05        # screen gates (synthetic-calibrated; the
+    hl_lo: float = 5.0             #   real-data path recalibrates in frun)
+    hl_hi: float = 60.0
+    sigma_floor: float = 0.0015
+    vol_floor_liq: float = 3.0e4
+    stability_th: float = 0.10
     adversarial: str = "none"      # none|regime|garch|seasonal|jump (healthy basis dynamics)
     basis_sigma_scale: float = 1.0  # scales the healthy basis vol (sensitivity knob)
     basis_hl_scale: float = 1.0     # scales the healthy basis half-life (sensitivity knob)
@@ -386,8 +392,14 @@ def build_universe(ds: FuturesDataset, cfg: FuturesConfig) -> FuturesUniverse:
                 vol3[c, j, :] = pd.to_numeric(ds.volume[col], errors="coerce").fillna(0.0).values
         lvl = np.exp(logF[c])
         start_price[code] = float(np.nanmedian(lvl)) if np.isfinite(lvl).any() else np.nan
+        sector_raw = sp["sector"]
+        try:
+            sector_val = int(sector_raw)
+        except (TypeError, ValueError):
+            sector_val = sorted({str(ds.specs["sector"].iloc[i])
+                                 for i in range(len(ds.specs))}).index(str(sector_raw))
         specs.append(CommoditySpec(
-            code=code, sector=int(sp["sector"]),
+            code=code, sector=sector_val,
             multiplier=float(sp["multiplier"]), tick=float(sp["tick"]),
             fee_per_lot=None if pd.isna(sp.get("fee_per_lot")) else float(sp["fee_per_lot"]),
             fee_rate=None if pd.isna(sp.get("fee_rate")) else float(sp["fee_rate"]),
@@ -624,9 +636,32 @@ def _back_adjust(S_full: np.ndarray, roll: np.ndarray) -> np.ndarray:
     return S_full - np.cumsum(jump)
 
 
-def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.05,
-                      hl_lo: float = 5.0, hl_hi: float = 60.0,
-                      vol_floor: float = 0.0015) -> tuple:
+def _longest_run(mask: np.ndarray) -> tuple:
+    """(start, end) of the longest consecutive True run - real panels have
+    interior gaps (suspensions, missing contract days) that statsmodels
+    rejects; first/last trimming is not enough."""
+    best = (0, 0)
+    cur_start = None
+    for i, m in enumerate(mask):
+        if m and cur_start is None:
+            cur_start = i
+        elif not m and cur_start is not None:
+            if i - cur_start > best[1] - best[0]:
+                best = (cur_start, i)
+            cur_start = None
+    if cur_start is not None and len(mask) - cur_start > best[1] - best[0]:
+        best = (cur_start, len(mask))
+    return best
+
+
+def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = None,
+                      hl_lo: float = None, hl_hi: float = None,
+                      vol_floor: float = None) -> tuple:
+    cfg = u.cfg
+    pvalue_th = pvalue_th if pvalue_th is not None else cfg.pvalue_th
+    hl_lo = hl_lo if hl_lo is not None else cfg.hl_lo
+    hl_hi = hl_hi if hl_hi is not None else cfg.hl_hi
+    vol_floor = vol_floor if vol_floor is not None else cfg.sigma_floor
     """Stationarity + LIQUIDITY screening on the training window, generalized
     to N-leg spreads. Combo (3-leg) residuals use plain ADF whose critical
     values are liberal for k>1 regressors, so combos face a stricter p-cut."""
@@ -639,9 +674,8 @@ def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.0
         both = np.isfinite(y) & np.all([np.isfinite(X) for X in Xs], axis=0)
         if both.sum() < 200:
             continue
-        # evaluate on the jointly-listed stretch (keep it contiguous)
-        first = int(np.argmax(both))
-        last = len(both) - int(np.argmax(both[::-1]))
+        # evaluate on the longest contiguous jointly-listed stretch
+        first, last = _longest_run(both)
         y = y[first:last]
         Xs = [X[first:last] for X in Xs]
         if len(y) < 250:
@@ -669,10 +703,7 @@ def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.0
         adj_full = _back_adjust(S_full, cand["roll"])
         adj_tr = adj_full[:train_end]
         fin = np.isfinite(adj_tr)
-        if fin.sum() < 250:
-            continue
-        f2 = int(np.argmax(fin))
-        l2 = len(fin) - int(np.argmax(fin[::-1]))
+        f2, l2 = _longest_run(fin)
         spread = adj_tr[f2:l2]
         if len(spread) < 250 or not np.isfinite(spread).all():
             continue
@@ -692,7 +723,7 @@ def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.0
           and r["stab"] < r["stab_cut"]
           and np.isfinite(r["hl"]) and hl_lo <= r["hl"] <= hl_hi
           and np.isfinite(r["sigma_eq"]) and r["sigma_eq"] >= vol_floor
-          and r["liq"] >= u.cfg.vol_floor_liq]
+          and r["liq"] >= cfg.vol_floor_liq]
     ok.sort(key=lambda r: r["p"])
     selected, cal_used, noncal_used = [], set(), set()
     n_cal = n_noncal = 0
