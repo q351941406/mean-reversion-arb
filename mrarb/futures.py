@@ -25,6 +25,7 @@ import pandas as pd
 from statsmodels.tsa.stattools import adfuller, coint
 
 from .config import StratParams
+from .data import DataProvider, FuturesDataset
 from .ou import fit_ou
 from .strategy import _rolling_z, ou_z_point_in_time, position_from_z
 from .synth import _garch_t_innovations, _simulate_ou_spread, _with_jumps
@@ -92,10 +93,10 @@ class CommoditySpec:
     fee_per_lot: float | None
     fee_rate: float | None
     margin_rate: float
-    expiry_step: int
-    activity: float
-    healthy_term: bool
-    start_price: float
+    expiry_step: int | None = None
+    activity: float | None = None
+    healthy_term: bool | None = None   # ground truth (synthetic only)
+    start_price: float | None = None
 
 
 @dataclass
@@ -107,12 +108,20 @@ class FuturesUniverse:
     volume: np.ndarray            # (n_com, n_mat, T) daily lots (0 off-list)
     rank_idx: np.ndarray          # (3, T, n_com) contract index by volume rank (-1 none)
     roll_days: dict               # com -> bool array: dominant-contract switches
-    planted_cross: list
-    healthy: np.ndarray
+    planted_cross: list           # ground truth (synthetic only; [] for real data)
+    healthy: np.ndarray | None    # ground truth (None = external data, unknown)
 
     @property
     def n_com(self) -> int:
         return len(self.specs)
+
+    @property
+    def n_mat(self) -> int:
+        return self.logF.shape[1]
+
+    @property
+    def n_days(self) -> int:
+        return self.logF.shape[2]
 
 
 @dataclass
@@ -202,7 +211,10 @@ def _hostile_basis(rng, T: int, cfg: FuturesConfig, sigma_eq: float) -> np.ndarr
     return _simulate_ou_spread(rng, T, kappa, sigma_eq)
 
 
-def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
+def _simulate_panel(cfg: FuturesConfig):
+    """Generate the synthetic contract-level panel (prices, volume, expiry
+    calendar, specs, ground truth). The RNG consumption order is part of the
+    contract: moving calls changes every seeded universe."""
     rng = np.random.default_rng(cfg.seed)
     T, n_com = cfg.n_days, len(_SPEC_TABLE)
     n_sectors = max(s[1] for s in _SPEC_TABLE) + 1
@@ -284,17 +296,103 @@ def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
     activity = np.array([s[8] for s in _SPEC_TABLE])[:, None, None]
     volume = np.where(listed, activity * profile * delivery * np.exp(noise), 0.0)
 
-    # --- algorithmic dominant contract (hysteresis) + next-expiry ranks ---
-    rank_idx, roll_days = _compute_dominance(volume, listed, tau, cfg)
+    # --- pack the panel into the provider contract ---
+    cols = [f"{_SPEC_TABLE[c][0]}:F{j}" for c in range(n_com) for j in range(n_mat)]
+    flat = np.where(np.isfinite(logF), np.exp(logF), np.nan).reshape(n_com * n_mat, T).T
+    prices = pd.DataFrame(flat, index=pd.RangeIndex(T), columns=cols)
+    vol_df = pd.DataFrame(
+        volume.reshape(n_com * n_mat, T).T, index=prices.index, columns=cols)
+    contracts = pd.DataFrame(
+        [{"code": _SPEC_TABLE[c][0], "contract_id": f"F{j}",
+          "expiry_day": int(offsets[c] + steps[c] * (j + 1)),
+          "maturity": j}
+         for c in range(n_com) for j in range(n_mat)])
+    specs = pd.DataFrame(
+        [{"code": s[0], "multiplier": s[2], "tick": s[3],
+          "fee_per_lot": s[4], "fee_rate": s[5], "margin_rate": s[6],
+          "sector": s[1], "expiry_step": s[7], "activity": s[8]}
+         for s in _SPEC_TABLE],
+    ).set_index("code")
+    meta = {"healthy": healthy, "planted_cross": planted_cross,
+            "start_price": start_p, "source": "synthetic"}
+    return FuturesDataset(prices=prices, volume=vol_df, contracts=contracts,
+                          specs=specs, meta=meta)
 
-    specs = [CommoditySpec(code=code, sector=sec, multiplier=mult, tick=tick,
-                           fee_per_lot=fp, fee_rate=fr, margin_rate=mr,
-                           expiry_step=st, activity=act,
-                           healthy_term=bool(healthy[c]), start_price=float(start_p[c]))
-             for c, (code, sec, mult, tick, fp, fr, mr, st, act) in enumerate(_SPEC_TABLE)]
-    return FuturesUniverse(cfg=cfg, specs=specs, tau=tau, logF=logF, volume=volume,
+
+class SyntheticProvider(DataProvider):
+    """The built-in simulator exposed as a data provider - proves that the
+    whole pipeline (screening/signals/backtest/MC) runs off the adapter
+    contract and not off the generator's internals."""
+
+    name = "synthetic"
+
+    def __init__(self, cfg: FuturesConfig):
+        self.cfg = cfg
+
+    def load_dataset(self) -> FuturesDataset:
+        return _simulate_panel(self.cfg)
+
+
+def build_universe(ds: FuturesDataset, cfg: FuturesConfig) -> FuturesUniverse:
+    """Align ANY provider's contract panel into the (n_com, n_mat, T) universe
+    grid the pipeline consumes. Contracts are sorted by expiry per commodity;
+    commodities may have different contract counts (padded with NaN)."""
+    ds.validate()
+    codes = list(ds.specs.index)
+    n_com = len(codes)
+    T = ds.prices.shape[0]
+    tt = np.arange(T)
+
+    n_mat = 0
+    per_code = {}
+    for code in codes:
+        sub = ds.contracts[ds.contracts["code"] == code].sort_values("expiry_day")
+        per_code[code] = sub
+        n_mat = max(n_mat, len(sub))
+
+    tau = np.full((n_com, n_mat, T), np.nan)
+    logF = np.full((n_com, n_mat, T), np.nan)
+    vol3 = np.zeros((n_com, n_mat, T))
+    specs, start_price = [], {}
+    meta_healthy = ds.meta.get("healthy")
+    for c, code in enumerate(codes):
+        sp = ds.specs.loc[code]
+        for j, (_, row) in enumerate(per_code[code].iterrows()):
+            col = f"{code}:{row['contract_id']}"
+            expiry = int(row["expiry_day"]) if np.isfinite(row["expiry_day"]) else -1
+            tau[c, j, :] = expiry - tt
+            if col in ds.prices.columns:
+                with np.errstate(invalid="ignore"):
+                    logF[c, j, :] = np.log(pd.to_numeric(ds.prices[col], errors="coerce").values)
+                vol3[c, j, :] = pd.to_numeric(ds.volume[col], errors="coerce").fillna(0.0).values
+        lvl = np.exp(logF[c])
+        start_price[code] = float(np.nanmedian(lvl)) if np.isfinite(lvl).any() else np.nan
+        specs.append(CommoditySpec(
+            code=code, sector=int(sp["sector"]),
+            multiplier=float(sp["multiplier"]), tick=float(sp["tick"]),
+            fee_per_lot=None if pd.isna(sp.get("fee_per_lot")) else float(sp["fee_per_lot"]),
+            fee_rate=None if pd.isna(sp.get("fee_rate")) else float(sp["fee_rate"]),
+            margin_rate=float(sp["margin_rate"]),
+            expiry_step=None if "expiry_step" not in ds.specs.columns or pd.isna(sp.get("expiry_step", np.nan))
+            else int(sp["expiry_step"]),
+            activity=None if "activity" not in ds.specs.columns or pd.isna(sp.get("activity", np.nan))
+            else float(sp["activity"]),
+            healthy_term=None if meta_healthy is None else bool(meta_healthy[c]),
+            start_price=start_price[code]))
+
+    listed = (tau > 0) & (tau <= cfg.listing_span) & np.isfinite(logF)
+    logF = np.where(listed, logF, np.nan)
+    vol3 = np.where(listed, vol3, 0.0)
+    rank_idx, roll_days = _compute_dominance(vol3, listed, tau, cfg)
+    return FuturesUniverse(cfg=cfg, specs=specs, tau=tau, logF=logF, volume=vol3,
                            rank_idx=rank_idx, roll_days=roll_days,
-                           planted_cross=planted_cross, healthy=healthy)
+                           planted_cross=ds.meta.get("planted_cross", []),
+                           healthy=meta_healthy)
+
+
+def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
+    """Back-compat entry point: synthetic provider -> universe."""
+    return build_universe(SyntheticProvider(cfg).load_dataset(), cfg)
 
 
 # --------------------------------------------------------------------------
@@ -481,7 +579,9 @@ def _tr(u: FuturesUniverse) -> int:
     return int(u.cfg.n_days * u.cfg.train_fraction)
 
 
-def _is_true(u: FuturesUniverse, cand: dict) -> bool:
+def _is_true(u: FuturesUniverse, cand: dict) -> bool | None:
+    if u.healthy is None:
+        return None                      # external data: no ground truth
     coms = set(cand["com"])
     if cand["kind"] == "cal":
         return bool(u.healthy[cand["com"][0]])

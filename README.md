@@ -18,7 +18,12 @@
 .venv/bin/python run.py --seed 7
 .venv/bin/python run.py --mc 12
 
-# 测试(10 项: PnL恒等式 / 扰动PIT不变性 / 组合层)
+# 数据适配层
+.venv/bin/python frun.py --export-sample --data-dir data/sample   # 合成数据导出为 CSV 格式
+.venv/bin/python frun.py --provider csv --data-dir data/sample    # CSV 读回跑管道(结果逐位一致)
+# 真实数据: 按 docs/07 的 CSV 格式放入 data/ 目录, --provider csv 即可; 新数据源实现一个 load_dataset
+
+# 测试(13 项: PnL恒等式 / 扰动PIT不变性 / 组合层 / 数据适配器 / LiveRunner)
 .venv/bin/python -m unittest tests.test_mrarb -v
 ```
 
@@ -36,6 +41,7 @@
 | [04 · 真实数据接入](docs/04-real-data-guide.md) | 十分钟接入真实数据、合成器校准、升级路线与实盘 checklist |
 | [05 · 期货化](docs/05-futures.md) | 中国商品期货语义:期限结构/换月/手数化账户、三类价差(跨期/跨品种/三腿中性)算法发现、未来函数审计 |
 | [06 · 稳健性与测试](docs/06-robustness.md) | 正确性测试套件(PnL恒等式/扰动PIT检测)、组合层风控(净敞口/ERC)、敌意生成器实验、参数扫描、Deflated Sharpe |
+| [07 · 数据适配层](docs/07-data-adapters.md) | 数据契约与 Provider 接口、CSV 格式规范、akshare 模板、实盘骨架(LiveRunner)——切换数据源 = 实现一个 load_dataset |
 
 ## 文献依据(arXiv)
 

@@ -26,8 +26,10 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="statsmodels")
 
 from mrarb.backtest import perf_stats, portfolio_return, trade_stats
 from mrarb.config import StratParams
-from mrarb.futures import (FuturesConfig, SpreadSlot, backtest_slot,
-                           screen_candidates, simulate_futures)
+from mrarb.data import CSVProvider, MockProvider, write_dataset_csv
+from mrarb.futures import (FuturesConfig, SpreadSlot, SyntheticProvider,
+                           backtest_slot, build_universe, screen_candidates,
+                           simulate_futures)
 from mrarb.portfolio import (benjamini_hochberg, deflated_sharpe,
                              enforce_net_cap, erc_weights, net_exposure)
 
@@ -171,39 +173,55 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
     return port, per_slot, m_tr, m_te, n_trades_train, acct_info
 
 
-def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
-    u = simulate_futures(cfg)
+def truth(v) -> str:
+    """Ground-truth display: external data has none (None -> '?')."""
+    return {True: "✓", False: "✗", None: "?"}.get(v, "?")
+
+
+def true_count(slots) -> int:
+    return sum(1 for s in slots if s.is_true is True)
+
+
+def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None):
+    provider = provider or SyntheticProvider(cfg)
+    ds = provider.load_dataset()
+    u = build_universe(ds, cfg)
     train_end = int(cfg.n_days * cfg.train_fraction)
     slots, rows = screen_candidates(u, train_end)
 
     if verbose:
-        n_struct = int((~u.healthy).sum())
         n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
         print("\n" + "=" * 76)
-        print(f"期货合成宇宙: {u.n_com} 个品种 / {cfg.n_days} 天 / 种子 {cfg.seed}")
-        print(f"合约带: 各品种独立到期间隔(30-60天错开) + ~{cfg.listing_span} 天挂牌窗口, "
+        print(f"期货宇宙: {u.n_com} 个品种 / {cfg.n_days} 天 / "
+              f"数据源 {getattr(provider, 'name', 'synthetic')} / 种子 {cfg.seed}")
+        print(f"合约带: 各品种独立到期间隔 + ~{cfg.listing_span} 天挂牌窗口, "
               f"任意时刻同时挂牌多个合约")
         print(f"移仓换月: 主力 = 滚动成交量最大者(5日平滑), 主力切换即换月 — "
               f"样本内各品种换月 {min(n_rolls)}~{max(n_rolls)} 次")
-        print(f"{int(u.healthy.sum())} 个品种价差健康, {n_struct} 个品种基素随机游走(算法需自行剔除); "
-              f"植入跨品种协整对 {len(u.planted_cross)} 个")
+        if u.healthy is not None:
+            n_struct = int((~u.healthy).sum())
+            print(f"{int(u.healthy.sum())} 个品种价差健康, {n_struct} 个品种基素随机游走(算法需自行剔除); "
+                  f"植入跨品种协整对 {len(u.planted_cross)} 个")
+        else:
+            print("ground truth: 无(外部数据源, '真回归'列显示为 ?)")
         print(f"训练期 [0, {train_end})  测试期 [{train_end}, {cfg.n_days})")
+        n_true_rows = sum(1 for r in rows if r["is_true"] is True) if u.healthy is not None else 0
         print(f"候选池: {len(rows)} 个价差 (跨期 {sum(r['kind']=='cal' for r in rows)}"
               f" + 跨品种 {sum(r['kind']=='cross' for r in rows)}"
               f" + 三腿中性 {sum(r['kind']=='combo' for r in rows)}),"
-              f" 真回归 {sum(r['is_true'] for r in rows)} 个; "
+              f" 真回归 {n_true_rows} 个; "
               f"BH-FDR(q=0.10) 后显著 {benjamini_hochberg([r['p'] for r in rows])} 个")
 
         spec_df = pd.DataFrame([{
             "品种": s.code, "乘数": s.multiplier, "跳价": s.tick,
             "手续费": f"{s.fee_per_lot}元/手" if s.fee_per_lot else f"{s.fee_rate*1e4:.1f}万分比",
             "保证金%": round(100 * s.margin_rate),
-            "到期间隔天": s.expiry_step,
-            "活跃度(万手/日)": round(s.activity / 1e4, 1),
+            "到期间隔天": s.expiry_step if s.expiry_step is not None else "-",
+            "活跃度(万手/日)": round(s.activity / 1e4, 1) if s.activity else "-",
             "换月次数": n_rolls[c],
-            "价差健康": s.healthy_term,
+            "价差健康": truth(s.healthy_term),
         } for c, s in enumerate(u.specs)])
-        print("\n--- 品种规格(仿真量级,真实世界形状)---")
+        print("\n--- 品种规格 ---")
         print(spec_df.to_string(index=False))
         if slots:
             sel_df = pd.DataFrame([{
@@ -212,12 +230,12 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
                 "各腿手数": ":".join(str(l.lots) for l in s.legs),
                 "换月次数": s.roll_count,
                 "腿部均量(万手)": round(s.liq / 1e4, 1),
-                "真回归": s.is_true,
+                "真回归": truth(s.is_true),
             } for s in slots])
             print(f"\n--- 算法发现(仅训练期: 平稳性+稳定性+半衰期+流动性门槛, ≤{cfg.max_slots} 槽) ---")
             print(sel_df.to_string(index=False))
-            n_true_sel = sum(s.is_true for s in slots)
-            print(f"发现质量: {n_true_sel}/{len(slots)} 槽为真回归")
+            if u.healthy is not None:
+                print(f"发现质量: {true_count(slots)}/{len(slots)} 槽为真回归")
 
     # ---- strategies: fixed defaults (rolling / OU / auto) + grid-tuned pick ----
     strategies = {"rolling": StratParams(mode="rolling"), "ou": StratParams(mode="ou"),
@@ -278,7 +296,7 @@ def report_slots(res):
     rows = []
     for s, _pos, _ret, ts in detail:
         rows.append({
-            "槽位": ts["slot"], "类型": ts["kind"], "真回归": ts["true"],
+            "槽位": ts["slot"], "类型": ts["kind"], "真回归": truth(ts["true"]),
             "训练夏普": round(ts["train_sharpe"], 2) if np.isfinite(ts["train_sharpe"]) else np.nan,
             "杠杆x": round(ts["leverage"], 1),
             "利用率%": round(100 * ts["utilization"], 0),
@@ -296,12 +314,15 @@ def report_slots(res):
 
 def plot_term_structure(res, outdir):
     u = res["universe"]
-    c_healthy = int(np.where(u.healthy)[0][0])
-    c_struct = int(np.where(~u.healthy)[0][0])
+    if u.healthy is not None:
+        picks = [(int(np.where(u.healthy)[0][0]), "HEALTHY commodity"),
+                 (int(np.where(~u.healthy)[0][0]), "STRUCTURAL (basis = random walk)")]
+    else:
+        picks = [(0, "commodity #0"), (1, "commodity #1")]
     fig, axes = plt.subplots(2, 1, figsize=(11, 7))
     t_snap = [300, 900, 1400]
-    for c, title in ((c_healthy, "HEALTHY commodity"), (c_struct, "STRUCTURAL (basis = random walk)")):
-        ax = axes[0 if c == c_healthy else 1]
+    for i, (c, title) in enumerate(picks):
+        ax = axes[i]
         for t in t_snap:
             dom = u.rank_idx[0, t, c]                      # volume-dominant contract
             if dom < 0:
@@ -386,7 +407,7 @@ def run_monte_carlo(args):
             m_te = res["strategies"][name]["m_te"]
             rows.append({"seed": seed, "strategy": MODE_LABEL_EN[name],
                          "n_slots": len(res["slots"]),
-                         "true_slots": sum(s.is_true for s in res["slots"]),
+                         "true_slots": true_count(res["slots"]),
                          "OOS_sharpe": m_te["sharpe"],
                          "OOS_ann_ret%": 100 * m_te["ann_ret"],
                          "OOS_max_dd%": 100 * m_te["max_dd"]})
@@ -440,7 +461,7 @@ def run_hostile(args):
             m_te = res["strategies"]["ou_tuned"]["m_te"]
             rows.append({"mode": mode, "seed": cfg.seed,
                          "slots": len(res["slots"]),
-                         "true_slots": sum(s.is_true for s in res["slots"]),
+                         "true_slots": true_count(res["slots"]),
                          "OOS_sharpe": m_te["sharpe"],
                          "OOS_ann%": 100 * m_te["ann_ret"],
                          "OOS_dd%": 100 * m_te["max_dd"]})
@@ -475,7 +496,7 @@ def run_sweep(args):
                 m_te = res["strategies"]["ou_tuned"]["m_te"]
                 rows.append({"setting": f"{dim}={v}", "seed": cfg.seed,
                              "slots": len(res["slots"]),
-                             "true_slots": sum(s.is_true for s in res["slots"]),
+                             "true_slots": true_count(res["slots"]),
                              "OOS_sharpe": m_te["sharpe"],
                              "OOS_ann%": 100 * m_te["ann_ret"]})
         print(f"[sweep] {dim} done", flush=True)
@@ -489,11 +510,30 @@ def run_sweep(args):
     df.to_csv(os.path.join(args.outdir, "sweep_results.csv"), index=False)
 
 
+def make_provider(args):
+    cfg = FuturesConfig(seed=args.seed, n_days=args.days)
+    if args.provider == "synthetic":
+        return SyntheticProvider(cfg)
+    if args.provider == "csv":
+        return CSVProvider(args.data_dir)
+    if args.provider == "mock":
+        return MockProvider(seed=args.seed)
+    if args.provider == "akshare":
+        from mrarb.data import AkshareProvider
+        return AkshareProvider(args.data_dir)
+    raise ValueError(f"unknown provider {args.provider}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Futures mean-reversion arb on synthetic futures data")
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--days", type=int, default=1500)
     ap.add_argument("--mc", type=int, default=0)
+    ap.add_argument("--provider", choices=["synthetic", "csv", "mock", "akshare"],
+                    default="synthetic", help="data source adapter")
+    ap.add_argument("--data-dir", type=str, default="data/sample")
+    ap.add_argument("--export-sample", action="store_true",
+                    help="write the synthetic dataset to --data-dir as CSVs")
     ap.add_argument("--hostile", action="store_true",
                     help="adversarial generator experiment (regime/garch/seasonal/jump)")
     ap.add_argument("--sweep", action="store_true",
@@ -503,6 +543,12 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
+    if args.export_sample:
+        cfg = FuturesConfig(seed=args.seed, n_days=args.days)
+        write_dataset_csv(SyntheticProvider(cfg).load_dataset(), args.data_dir)
+        print(f"样本数据已写入 {args.data_dir}/ (specs/contracts/prices/volume.csv)\n"
+              f"验证: .venv/bin/python frun.py --provider csv --data-dir {args.data_dir}")
+        return
     if args.mc > 0:
         run_monte_carlo(args)
         return
@@ -513,7 +559,8 @@ def main():
         run_sweep(args)
         return
 
-    res = run_pipeline(FuturesConfig(seed=args.seed, n_days=args.days))
+    cfg = FuturesConfig(seed=args.seed, n_days=args.days)
+    res = run_pipeline(cfg, provider=make_provider(args))
     report_slots(res)
     if not args.no_plots:
         plot_term_structure(res, args.outdir)

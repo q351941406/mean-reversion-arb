@@ -22,8 +22,8 @@ warnings.filterwarnings("ignore")
 
 from mrarb.config import StratParams
 from mrarb.futures import (FuturesConfig, FuturesUniverse, _back_adjust,
-                           _compute_dominance, backtest_slot, screen_candidates,
-                           simulate_futures, slot_positions)
+                           _compute_dominance, backtest_slot, build_universe,
+                           screen_candidates, simulate_futures, slot_positions)
 from mrarb.portfolio import (benjamini_hochberg, deflated_sharpe,
                              enforce_net_cap, erc_weights, leg_exposure,
                              net_exposure, risk_contributions)
@@ -210,6 +210,50 @@ class TestPortfolio(unittest.TestCase):
     def test_bh(self):
         self.assertEqual(benjamini_hochberg([0.001, 0.002, 0.5, 0.9], q=0.1), 2)
         self.assertEqual(benjamini_hochberg([], q=0.1), 0)
+
+
+class TestAdapters(unittest.TestCase):
+    """Data adapter contract: CSV roundtrip must reproduce the synthetic
+    universe bit-for-bit, and the live runner must produce advice."""
+
+    def test_csv_roundtrip_identical_universe(self):
+        import tempfile
+
+        from mrarb.data import CSVProvider, write_dataset_csv
+        cfg = FuturesConfig(seed=3, n_days=800)
+        u1 = simulate_futures(cfg)
+        with tempfile.TemporaryDirectory() as d:
+            from mrarb.futures import SyntheticProvider
+            write_dataset_csv(SyntheticProvider(cfg).load_dataset(), d)
+            u2 = build_universe(CSVProvider(d).load_dataset(), cfg)
+        np.testing.assert_allclose(u1.logF, u2.logF, rtol=1e-10, atol=1e-10,
+                                   equal_nan=True)
+        np.testing.assert_allclose(u1.volume, u2.volume)
+        np.testing.assert_array_equal(u1.rank_idx, u2.rank_idx)
+        # CSV carries no ground truth -> healthy becomes unknown
+        self.assertIsNone(u2.healthy)
+
+    def test_mock_provider_alignment(self):
+        from mrarb.data import MockProvider
+        ds = MockProvider(0).load_dataset()
+        u = build_universe(ds, FuturesConfig(seed=0, n_days=len(ds.prices)))
+        self.assertEqual(u.n_com, 2)
+        self.assertEqual(u.n_mat, 3)
+        self.assertTrue((u.rank_idx[0] >= 0).any())   # dominant identified
+
+    def test_live_runner_smoke(self):
+        from mrarb.data import MockProvider
+        from mrarb.live import LiveRunner
+        ds = MockProvider(0).load_dataset()
+        runner = LiveRunner(FuturesConfig(seed=0, n_days=len(ds.prices)),
+                            StratParams(mode="auto"))
+        runner.bind_static(ds.contracts, ds.specs)
+        for i in range(len(ds.prices)):
+            runner.on_bar(ds.prices.iloc[i].to_dict(), ds.volume.iloc[i].to_dict())
+        adv = runner.advise()
+        self.assertIsInstance(adv, list)
+        for item in adv:
+            self.assertIn("position", item)
 
 
 if __name__ == "__main__":
