@@ -254,6 +254,21 @@ class TestAdapters(unittest.TestCase):
         # CSV carries no ground truth -> healthy becomes unknown
         self.assertIsNone(u2.healthy)
 
+    def test_parquet_roundtrip_identical_universe(self):
+        import tempfile
+
+        from mrarb.data import ParquetProvider, write_dataset_parquet
+        cfg = FuturesConfig(seed=3, n_days=800)
+        u1 = simulate_futures(cfg)
+        with tempfile.TemporaryDirectory() as d:
+            from mrarb.futures import SyntheticProvider
+            write_dataset_parquet(SyntheticProvider(cfg).load_dataset(), d)
+            u2 = build_universe(ParquetProvider(d).load_dataset(), cfg)
+        np.testing.assert_allclose(u1.logF, u2.logF, rtol=0, atol=0,
+                                   equal_nan=True)   # parquet is lossless for f64
+        np.testing.assert_array_equal(u1.rank_idx, u2.rank_idx)
+        self.assertIsNone(u2.healthy)
+
     def test_mock_provider_alignment(self):
         from mrarb.data import MockProvider
         ds = MockProvider(0).load_dataset()

@@ -78,9 +78,9 @@ class DataProvider(ABC):
 
 
 class CSVProvider(DataProvider):
-    """Reads the CSV layout above. This is the recommended real-data path:
-    download dailies with any tool (akshare/tushare/Wind export), save them
-    in this layout, and the whole pipeline runs unchanged."""
+    """Reads the CSV layout above. Interop format (human-readable, any tool
+    can produce it) - for pipeline runs prefer ParquetProvider (columnar:
+    ~5-10x smaller, 10-100x faster to load, dtype-preserving)."""
 
     name = "csv"
 
@@ -95,6 +95,37 @@ class CSVProvider(DataProvider):
         specs = pd.read_csv(root / "specs.csv", index_col="code")
         prices.columns = [str(c).replace(".", ":", 1) for c in prices.columns]
         volume.columns = [str(c).replace(".", ":", 1) for c in volume.columns]
+        ds = FuturesDataset(prices=prices, volume=volume, contracts=contracts,
+                            specs=specs)
+        ds.validate()
+        return ds
+
+
+class ParquetProvider(DataProvider):
+    """Reads the Parquet layout - the RECOMMENDED format for pipeline runs.
+
+    data/
+      prices.parquet    index "day" + one column per contract
+      volume.parquet    same layout
+      contracts.parquet code, contract_id, expiry_day
+      specs.parquet     code-indexed spec table
+    """
+
+    name = "parquet"
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+
+    def load_dataset(self) -> FuturesDataset:
+        root = self.root
+
+        def read(name):
+            return pd.read_parquet(root / f"{name}.parquet")
+
+        prices = read("prices").set_index("day")
+        volume = read("volume").set_index("day")
+        contracts = read("contracts")
+        specs = read("specs").set_index("code")
         ds = FuturesDataset(prices=prices, volume=volume, contracts=contracts,
                             specs=specs)
         ds.validate()
@@ -199,8 +230,20 @@ class MockProvider(DataProvider):
         return ds
 
 
+def write_dataset_parquet(ds: FuturesDataset, root: str | Path) -> None:
+    """Persist a dataset in the Parquet layout (recommended for pipeline use)."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    ds.prices.rename_axis("day").reset_index().to_parquet(root / "prices.parquet",
+                                                          index=False)
+    ds.volume.rename_axis("day").reset_index().to_parquet(root / "volume.parquet",
+                                                          index=False)
+    ds.contracts.to_parquet(root / "contracts.parquet", index=False)
+    ds.specs.reset_index().to_parquet(root / "specs.parquet", index=False)
+
+
 def write_dataset_csv(ds: FuturesDataset, root: str | Path) -> None:
-    """Persist a dataset in the CSV layout (used for sample data & roundtrips)."""
+    """Persist a dataset in the CSV layout (interop: humans / other tools)."""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     p_out = ds.prices.copy()

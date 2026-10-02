@@ -26,7 +26,8 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="statsmodels")
 
 from mrarb.backtest import perf_stats, portfolio_return, trade_stats
 from mrarb.config import StratParams
-from mrarb.data import CSVProvider, MockProvider, write_dataset_csv
+from mrarb.data import (CSVProvider, MockProvider, ParquetProvider,
+                        write_dataset_csv, write_dataset_parquet)
 from mrarb.futures import (FuturesConfig, SpreadSlot, SyntheticProvider,
                            backtest_slot, build_universe, screen_candidates,
                            simulate_futures)
@@ -526,6 +527,8 @@ def make_provider(args):
         return SyntheticProvider(cfg)
     if args.provider == "csv":
         return CSVProvider(args.data_dir)
+    if args.provider == "parquet":
+        return ParquetProvider(args.data_dir)
     if args.provider == "mock":
         return MockProvider(seed=args.seed)
     if args.provider == "akshare":
@@ -539,11 +542,13 @@ def main():
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--days", type=int, default=1500)
     ap.add_argument("--mc", type=int, default=0)
-    ap.add_argument("--provider", choices=["synthetic", "csv", "mock", "akshare"],
-                    default="synthetic", help="data source adapter")
+    ap.add_argument("--provider", choices=["synthetic", "csv", "parquet", "mock", "akshare"],
+                    default="synthetic", help="data source adapter (parquet recommended)")
     ap.add_argument("--data-dir", type=str, default="data/sample")
     ap.add_argument("--export-sample", action="store_true",
-                    help="write the synthetic dataset to --data-dir as CSVs")
+                    help="write the synthetic dataset to --data-dir")
+    ap.add_argument("--export-format", choices=["parquet", "csv"], default="parquet",
+                    help="export format (parquet recommended)")
     ap.add_argument("--hostile", action="store_true",
                     help="adversarial generator experiment (regime/garch/seasonal/jump)")
     ap.add_argument("--sweep", action="store_true",
@@ -555,9 +560,15 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     if args.export_sample:
         cfg = FuturesConfig(seed=args.seed, n_days=args.days)
-        write_dataset_csv(SyntheticProvider(cfg).load_dataset(), args.data_dir)
-        print(f"样本数据已写入 {args.data_dir}/ (specs/contracts/prices/volume.csv)\n"
-              f"验证: .venv/bin/python frun.py --provider csv --data-dir {args.data_dir}")
+        ds = SyntheticProvider(cfg).load_dataset()
+        if args.export_format == "parquet":
+            write_dataset_parquet(ds, args.data_dir)
+            ext = "parquet"
+        else:
+            write_dataset_csv(ds, args.data_dir)
+            ext = "csv"
+        print(f"样本数据已写入 {args.data_dir}/ (specs/contracts/prices/volume.{ext})\n"
+              f"验证: .venv/bin/python frun.py --provider {args.export_format} --data-dir {args.data_dir}")
         return
     if args.hostile:
         run_hostile(args)
