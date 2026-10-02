@@ -104,11 +104,15 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
     for lev, info, wi in zip(levs, infos, w):
         acct += lev * wi * np.asarray(info["margin_series"])
     scale = 1.0
-    acct_max = float(acct.max())
-    if acct_max > 1.0:
-        scale = 0.95 / acct_max
+    # PIT solvency check: the global rescale decision uses the TRAIN-window
+    # margin peak only - scaling by the full-sample peak would be lookahead.
+    # The realized full-sample peak is still REPORTED as a diagnostic.
+    train_peak = float(acct[:train_end].max())
+    if train_peak > 1.0:
+        scale = 0.95 / train_peak
         slot_rets = [r * scale for r in slot_rets]
         levs = [lev * scale for lev in levs]
+    acct_max = float(acct.max())
 
     per_slot = []
     for s, pos, ret, lev, info in zip(slots, positions, slot_rets, levs, infos):

@@ -530,16 +530,17 @@ def _stability_p(spread_train: np.ndarray) -> float:
 
 
 def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
+    tr = _tr(u)          # capital base & lot rounding use TRAIN means only (PIT)
     legs = []
     for i, (c, rank) in enumerate(r["leg_specs"]):
         spec = u.specs[c]
-        lvl = np.exp(r["px_list"][i])
+        lvl = np.exp(r["px_list"][i])[:tr]
         p_bar = float(np.nanmean(np.where(np.isfinite(lvl), lvl, np.nan)))
         if i == 0:
             lots, sign = 1, 1.0
         else:
             b = float(r["betas"][i - 1])
-            y_lvl = np.exp(r["px_list"][0])
+            y_lvl = np.exp(r["px_list"][0])[:tr]
             py_bar = float(np.nanmean(np.where(np.isfinite(y_lvl), y_lvl, np.nan)))
             lots = max(1, int(round(abs(b) * spec.multiplier * p_bar
                                      / (u.specs[r["leg_specs"][0][0]].multiplier * py_bar))))
@@ -548,7 +549,7 @@ def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
                         fee=_fee_per_lot(spec), slip=spec.tick * _RANK_SLIP_TICKS[rank],
                         lots=lots, sign=sign))
     cap = max(leg.lots * leg.mult * float(np.nanmean(np.where(
-        np.isfinite(np.exp(r["px_list"][i])), np.exp(r["px_list"][i]), np.nan)))
+        np.isfinite(np.exp(r["px_list"][i])[:tr]), np.exp(r["px_list"][i])[:tr], np.nan)))
         for i, leg in enumerate(legs))
     return SpreadSlot(kind=r["kind"], label=r["label"], com=r["com"],
                       spread=r["S_full"], legs=legs, liq=r["liq"],
