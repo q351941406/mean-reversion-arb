@@ -113,26 +113,35 @@ class FuturesUniverse:
 
 
 @dataclass
+class Leg:
+    """One leg of a spread slot: contract series + account parameters."""
+    com: int
+    idx: np.ndarray            # contract index series (-1 = none)
+    rank: int                  # volume rank (drives slippage)
+    mult: float
+    fee: float
+    slip: float
+    lots: int
+    sign: float                # +1 long this leg when long the spread
+
+
+@dataclass
 class SpreadSlot:
-    kind: str                     # 'cal' | 'cross'
+    kind: str                  # 'cal' | 'cross' | 'combo'
     label: str
-    com: tuple
-    spread: np.ndarray            # raw spliced log spread (T,)
-    leg_idx: tuple                # (idx_legA, idx_legB) contract index series
-    slip_a: float                 # CNY slippage per lot, leg A (less liquid -> more)
-    slip_b: float
-    liq: float                    # train-mean daily volume of the thinner leg (lots)
+    com: tuple                 # all involved commodities
+    spread: np.ndarray         # raw spliced log spread (T,)
+    legs: list                 # list[Leg]; legs[0] is the target (y) leg
+    liq: float                 # train-mean daily volume of the thinnest leg (lots)
     roll_count: int
-    beta: float
-    lots_a: int
-    lots_b: int
-    adf_or_eg_p: float
     half_life: float
     sigma_eq: float
+    adf_or_eg_p: float
     is_true: bool
+    betas: tuple = ()          # hedge ratios on legs[1:]
     spread_adj: np.ndarray = None  # back-adjusted signal series (T,)
-    block: np.ndarray = None      # force-flat decision days (rolls + warmup)
-    ranks: tuple = (1, 2)
+    block: np.ndarray = None   # force-flat decision days (rolls + warmup)
+    ranks: tuple = ()
     oos_sharpe: float = np.nan
     cap: float = 1.0
 
@@ -317,41 +326,66 @@ def build_candidates(u: FuturesUniverse) -> list:
     T = u.cfg.n_days
     tr = _tr(u)
     cands = []
+
+    def roll_of(idxs):
+        roll = np.zeros(T, dtype=bool)
+        for idx in idxs:
+            roll[1:] |= (idx[1:] != idx[:-1]) & (idx[1:] >= 0) & (idx[:-1] >= 0)
+        return roll
+
+    def liq_of(leg_specs):
+        return float(np.nanmin([_leg_avg_vol(u, c, _leg(u, c, r)[0], tr)
+                                for c, r in leg_specs]))
+
+    # calendar: dominant vs next / second-next expiry (contracts chosen by the
+    # volume algorithm, nothing keyed on fixed offsets)
     for c, spec in enumerate(u.specs):
         for r1, r2 in _CAL_RANK_PAIRS:
-            idx_a, px_a = _leg(u, c, r1)
-            idx_b, px_b = _leg(u, c, r2)
-            roll = np.zeros(T, dtype=bool)
-            roll[1:] = ((idx_a[1:] != idx_a[:-1]) | (idx_b[1:] != idx_b[:-1])) & \
-                       (idx_a[1:] >= 0) & (idx_b[1:] >= 0)
-            liq = float(np.nanmin([_leg_avg_vol(u, c, idx_a, tr),
-                                   _leg_avg_vol(u, c, idx_b, tr)]))
+            leg_specs = [(c, r1), (c, r2)]
             cands.append({
                 "kind": "cal", "ranks": (r1, r2), "com": (c,),
                 "label": f"{spec.code} {_rank_name(r1)}~{_rank_name(r2)}",
-                "legA_idx": idx_a, "legB_idx": idx_b, "px_a": px_a, "px_b": px_b,
-                "roll": roll, "beta_fixed": 1.0,
-                "slip_a": spec.tick * _RANK_SLIP_TICKS[r1],
-                "slip_b": spec.tick * _RANK_SLIP_TICKS[r2],
-                "liq": liq,
+                "leg_specs": leg_specs,
+                "roll": roll_of([_leg(u, c, r)[0] for _, r in leg_specs]),
+                "beta_fixed": True,
+                "slips": [spec.tick * _RANK_SLIP_TICKS[r1], spec.tick * _RANK_SLIP_TICKS[r2]],
+                "liq": liq_of(leg_specs),
             })
+    # cross-commodity: dominant vs dominant
     for a in range(u.n_com):
         for b in range(a + 1, u.n_com):
-            idx_a, px_a = _leg(u, a, 1)
-            idx_b, px_b = _leg(u, b, 1)
-            roll = np.zeros(T, dtype=bool)
-            roll[1:] = ((idx_a[1:] != idx_a[:-1]) | (idx_b[1:] != idx_b[:-1])) & \
-                       (idx_a[1:] >= 0) & (idx_b[1:] >= 0)
-            liq = float(np.nanmin([_leg_avg_vol(u, a, idx_a, tr),
-                                   _leg_avg_vol(u, b, idx_b, tr)]))
+            leg_specs = [(a, 1), (b, 1)]
             cands.append({
                 "kind": "cross", "ranks": (1, 1), "com": (a, b),
                 "label": f"{u.specs[b].code}~{u.specs[a].code} 主力对主力",
-                "legA_idx": idx_a, "legB_idx": idx_b, "px_a": px_a, "px_b": px_b,
-                "roll": roll | u.roll_days[a] | u.roll_days[b],
-                "beta_fixed": None,
-                "slip_a": u.specs[a].tick, "slip_b": u.specs[b].tick,
-                "liq": liq,
+                "leg_specs": leg_specs,
+                "roll": roll_of([_leg(u, c, 1)[0] for c, _ in leg_specs])
+                        | u.roll_days[a] | u.roll_days[b],
+                "beta_fixed": False,
+                "slips": [u.specs[a].tick, u.specs[b].tick],
+                "liq": liq_of(leg_specs),
+            })
+    # sector triples: factor-neutral baskets with tradable legs (A-L style) -
+    # the target commodity regressed on the other two of its sector
+    sectors = {}
+    for c, spec in enumerate(u.specs):
+        sectors.setdefault(spec.sector, []).append(c)
+    for sec, members in sectors.items():
+        if len(members) < 3:
+            continue
+        for y in members:
+            leg_specs = [(y, 1)] + [(x, 1) for x in members if x != y]
+            coms = tuple(sorted(cc for cc, _ in leg_specs))
+            codes = [u.specs[cc].code for cc, _ in leg_specs]
+            cands.append({
+                "kind": "combo", "ranks": (1, 1, 1), "com": coms,
+                "label": f"{'~'.join(codes)} 三腿中性",
+                "leg_specs": leg_specs,
+                "roll": roll_of([_leg(u, c, 1)[0] for c, _ in leg_specs])
+                        | np.logical_or.reduce([u.roll_days[c] for c in coms]),
+                "beta_fixed": False,
+                "slips": [u.specs[c].tick for c, _ in leg_specs],
+                "liq": liq_of(leg_specs),
             })
     return cands
 
@@ -365,9 +399,11 @@ def _tr(u: FuturesUniverse) -> int:
 
 
 def _is_true(u: FuturesUniverse, cand: dict) -> bool:
+    coms = set(cand["com"])
     if cand["kind"] == "cal":
         return bool(u.healthy[cand["com"][0]])
-    return any({a, b} == set(cand["com"]) for a, b, _ in u.planted_cross)
+    # cross / combo: true iff a planted cointegrated pair is inside the set
+    return any({a, b} <= coms for a, b, _ in u.planted_cross)
 
 
 def _back_adjust(S_full: np.ndarray, roll: np.ndarray) -> np.ndarray:
@@ -389,35 +425,45 @@ def _back_adjust(S_full: np.ndarray, roll: np.ndarray) -> np.ndarray:
 def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.05,
                       hl_lo: float = 5.0, hl_hi: float = 60.0,
                       vol_floor: float = 0.0015) -> tuple:
-    """Stationarity + LIQUIDITY screening on the training window. The
-    liquidity floor (avg daily volume of the thinner leg) is part of what the
-    algorithm uses to decide what is tradeable - nothing is pre-selected."""
+    """Stationarity + LIQUIDITY screening on the training window, generalized
+    to N-leg spreads. Combo (3-leg) residuals use plain ADF whose critical
+    values are liberal for k>1 regressors, so combos face a stricter p-cut."""
     rows = []
     for cand in build_candidates(u):
-        y = cand["px_b"][:train_end]
-        x = cand["px_a"][:train_end]
-        both = np.isfinite(y) & np.isfinite(x)
+        pxs = [_leg(u, c, r)[1] for c, r in cand["leg_specs"]]
+        idxs = [_leg(u, c, r)[0] for c, r in cand["leg_specs"]]
+        y = pxs[0][:train_end]
+        Xs = [p[:train_end] for p in pxs[1:]]
+        both = np.isfinite(y) & np.all([np.isfinite(X) for X in Xs], axis=0)
         if both.sum() < 200:
             continue
         # evaluate on the jointly-listed stretch (keep it contiguous)
-        first, last = np.argmax(both), len(both) - np.argmax(both[::-1])
-        y, x = y[first:last], x[first:last]
+        first = int(np.argmax(both))
+        last = len(both) - int(np.argmax(both[::-1]))
+        y = y[first:last]
+        Xs = [X[first:last] for X in Xs]
         if len(y) < 250:
             continue
-        # beta/alpha on the raw spread: generation jumps act like fixed
-        # effects - they bias the intercept, barely the slope
-        if cand["beta_fixed"] is not None:
-            beta, alpha = 1.0, 0.0
-            p = adfuller(y - x, autolag="AIC")[1]
+        # hedge ratios on the raw spread: generation jumps act like fixed
+        # effects - they bias the intercept, barely the slopes
+        if cand["beta_fixed"]:
+            betas, alpha = np.array([1.0]), 0.0
+            p = adfuller(y - Xs[0], autolag="AIC")[1]
+            p_cut = float(pvalue_th)
         else:
-            X = np.column_stack([x, np.ones_like(x)])
+            X = np.column_stack(Xs + [np.ones_like(y)])
             coef, *_ = np.linalg.lstsq(X, y, rcond=None)
-            beta, alpha = float(coef[0]), float(coef[1])
-            _, p_yx, _ = coint(y, x, trend="c")
-            _, p_xy, _ = coint(x, y, trend="c")
-            p = min(p_yx, p_xy)
+            betas, alpha = coef[:-1], float(coef[-1])
+            if len(betas) == 1:
+                _, p_yx, _ = coint(y, Xs[0], trend="c")
+                _, p_xy, _ = coint(Xs[0], y, trend="c")
+                p = min(p_yx, p_xy)
+                p_cut = float(pvalue_th)
+            else:
+                p = adfuller(y - X @ coef, autolag="AIC")[1]
+                p_cut = min(float(pvalue_th), 0.01)
         # screens run on the BACK-ADJUSTED spread (continuous across rolls)
-        S_full = cand["px_b"] - (alpha + beta * cand["px_a"])
+        S_full = pxs[0] - alpha - sum(float(b) * p for b, p in zip(betas, pxs[1:]))
         adj_full = _back_adjust(S_full, cand["roll"])
         adj_tr = adj_full[:train_end]
         fin = np.isfinite(adj_tr)
@@ -429,32 +475,49 @@ def screen_candidates(u: FuturesUniverse, train_end: int, pvalue_th: float = 0.0
         if len(spread) < 250 or not np.isfinite(spread).all():
             continue
         ou = fit_ou(spread)
+        # combos: stricter p-cut (liberal residual ADF) but slightly relaxed
+        # stability gate - half-sample ADFs have low power with 2 regressors
+        stab_cut = u.cfg.stability_th + (0.05 if cand["kind"] == "combo" else 0.0)
         stab = _stability_p(spread)
-        rows.append({**cand, "y_full": cand["px_b"], "x_full": cand["px_a"],
-                     "beta": beta, "alpha": alpha, "adj_full": adj_full,
-                     "p": float(p), "stab": stab, "hl": ou.half_life,
-                     "sigma_eq": ou.sigma_eq, "is_true": _is_true(u, cand)})
+        rows.append({**cand, "px_list": pxs, "leg_idx": idxs, "S_full": S_full,
+                     "betas": tuple(float(b) for b in np.atleast_1d(betas)),
+                     "alpha": float(alpha), "adj_full": adj_full,
+                     "p": float(p), "p_cut": p_cut, "stab": stab, "stab_cut": stab_cut,
+                     "hl": ou.half_life, "sigma_eq": ou.sigma_eq,
+                     "is_true": _is_true(u, cand)})
     ok = [r for r in rows
-          if np.isfinite(r["p"]) and r["p"] < pvalue_th
-          and r["stab"] < u.cfg.stability_th
+          if np.isfinite(r["p"]) and r["p"] < r["p_cut"]
+          and r["stab"] < r["stab_cut"]
           and np.isfinite(r["hl"]) and hl_lo <= r["hl"] <= hl_hi
           and np.isfinite(r["sigma_eq"]) and r["sigma_eq"] >= vol_floor
           and r["liq"] >= u.cfg.vol_floor_liq]
     ok.sort(key=lambda r: r["p"])
-    selected, cal_used, cross_used = [], set(), set()
+    selected, cal_used, noncal_used = [], set(), set()
+    n_cal = n_noncal = 0
+    combo_taken = False
+    max_noncal = u.cfg.max_slots - u.cfg.max_cal_slots
     for r in ok:
         if len(selected) >= u.cfg.max_slots:
             break
+        coms = set(r["com"])
         if r["kind"] == "cal":
-            c = r["com"][0]
-            if c in cal_used or sum(1 for s in selected if s["kind"] == "cal") >= u.cfg.max_cal_slots:
+            if coms & cal_used or n_cal >= u.cfg.max_cal_slots:
                 continue
-            cal_used.add(c)
+            cal_used |= coms
+            n_cal += 1
+        elif r["kind"] == "combo":
+            # at most one 3-leg slot, reserved so crosses cannot crowd it out
+            if combo_taken or coms & noncal_used or n_noncal >= max_noncal:
+                continue
+            noncal_used |= coms
+            n_noncal += 1
+            combo_taken = True
         else:
-            a, b = r["com"]
-            if a in cross_used or b in cross_used:
+            # each commodity holds at most ONE non-calendar slot
+            if coms & noncal_used or n_noncal >= max_noncal:
                 continue
-            cross_used.update((a, b))
+            noncal_used |= coms
+            n_noncal += 1
         selected.append(r)
     return [_to_slot(u, r) for r in selected], rows
 
@@ -467,29 +530,34 @@ def _stability_p(spread_train: np.ndarray) -> float:
 
 
 def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
-    if r["kind"] == "cal":
-        spec = u.specs[r["com"][0]]
-        lots_a = lots_b = 1
-        cap = float(spec.multiplier * spec.start_price)
-    else:
-        a, b = r["com"]
-        sa, sb = u.specs[a], u.specs[b]
-        pa = float(np.nanmean(np.where(np.isfinite(r["x_full"]), np.exp(r["x_full"]), np.nan)))
-        pb = float(np.nanmean(np.where(np.isfinite(r["y_full"]), np.exp(r["y_full"]), np.nan)))
-        lots_a = max(1, int(round(r["beta"] * sb.multiplier * pb / (sa.multiplier * pa))))
-        lots_b = 1
-        cap = max(lots_a * sa.multiplier * pa, lots_b * sb.multiplier * pb)
-    spread = r["y_full"] - (r["alpha"] + r["beta"] * r["x_full"])
+    legs = []
+    for i, (c, rank) in enumerate(r["leg_specs"]):
+        spec = u.specs[c]
+        lvl = np.exp(r["px_list"][i])
+        p_bar = float(np.nanmean(np.where(np.isfinite(lvl), lvl, np.nan)))
+        if i == 0:
+            lots, sign = 1, 1.0
+        else:
+            b = float(r["betas"][i - 1])
+            y_lvl = np.exp(r["px_list"][0])
+            py_bar = float(np.nanmean(np.where(np.isfinite(y_lvl), y_lvl, np.nan)))
+            lots = max(1, int(round(abs(b) * spec.multiplier * p_bar
+                                     / (u.specs[r["leg_specs"][0][0]].multiplier * py_bar))))
+            sign = -1.0 if b > 0 else 1.0
+        legs.append(Leg(com=c, idx=r["leg_idx"][i], rank=rank, mult=spec.multiplier,
+                        fee=_fee_per_lot(spec), slip=spec.tick * _RANK_SLIP_TICKS[rank],
+                        lots=lots, sign=sign))
+    cap = max(leg.lots * leg.mult * float(np.nanmean(np.where(
+        np.isfinite(np.exp(r["px_list"][i])), np.exp(r["px_list"][i]), np.nan)))
+        for i, leg in enumerate(legs))
     return SpreadSlot(kind=r["kind"], label=r["label"], com=r["com"],
-                      spread=spread, spread_adj=r["adj_full"],
-                      block=_roll_block(r["roll"]),
-                      leg_idx=(r["legA_idx"], r["legB_idx"]),
-                      slip_a=r["slip_a"], slip_b=r["slip_b"], liq=r["liq"],
+                      spread=r["S_full"], legs=legs, liq=r["liq"],
                       roll_count=int(r["roll"].sum()),
-                      beta=r["beta"], lots_a=lots_a, lots_b=lots_b,
-                      adf_or_eg_p=r["p"], half_life=r["hl"],
-                      sigma_eq=r["sigma_eq"], is_true=r["is_true"],
-                      ranks=r.get("ranks", (1, 2)), cap=cap)
+                      half_life=r["hl"], sigma_eq=r["sigma_eq"],
+                      adf_or_eg_p=r["p"], is_true=r["is_true"],
+                      betas=r["betas"], spread_adj=r["adj_full"],
+                      block=_roll_block(r["roll"]), ranks=r.get("ranks", ()),
+                      cap=cap)
 
 
 # --------------------------------------------------------------------------
@@ -499,15 +567,13 @@ def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
 def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
                   cost_mult: float = 1.0, margin_target: float | None = None,
                   lev_cap: float = 4.0):
-    """OU/rolling signals + lot accounting for one spread slot. Legs are the
-    volume-ranked contract series stored on the slot; slippage per leg scales
-    with its liquidity rank. See eval-side docs for margin_target."""
+    """OU/rolling signals + N-leg lot accounting for one spread slot. Signals
+    run on the back-adjusted spread; PnL on the raw legs (CNY price diffs).
+    Slippage per leg scales with its volume rank."""
     T = u.cfg.n_days
     eff_mode = params.mode
     if params.mode == "auto":
-        eff_mode = "rolling" if slot.kind == "cross" else "ou"
-    # signals on the BACK-ADJUSTED spread (continuous across rollovers);
-    # PnL below stays on the raw legs
+        eff_mode = "rolling" if slot.kind in ("cross", "combo") else "ou"
     if eff_mode == "rolling":
         z = _rolling_z(pd.Series(slot.spread_adj), params.window)
     else:
@@ -515,29 +581,17 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
     max_hold = int(np.ceil(params.hold_mult * slot.half_life))
     pos = position_from_z(z, params, max_hold, block=slot.block)
 
-    idx_a, idx_b = slot.leg_idx
     tt = np.arange(T)
-    px_a = np.where(idx_a >= 0, u.logF[slot.com[0], np.clip(idx_a, 0, None), tt], np.nan)
-    if slot.kind == "cal":
-        px_b = np.where(idx_b >= 0, u.logF[slot.com[0], np.clip(idx_b, 0, None), tt], np.nan)
-        mult_a = mult_b = u.specs[slot.com[0]].multiplier
-    else:
-        px_b = np.where(idx_b >= 0, u.logF[slot.com[1], np.clip(idx_b, 0, None), tt], np.nan)
-        mult_a, mult_b = u.specs[slot.com[0]].multiplier, u.specs[slot.com[1]].multiplier
-    fee_a, fee_b = _fee_per_leg(u, slot, "a"), _fee_per_leg(u, slot, "b")
-    lots_a, lots_b = slot.lots_a, slot.lots_b   # spread long = +B, -A
-
-    def dp(px):
-        # CNY price change per point: dP = P_t - P_{t-1} (NOT dlog - the
-        # price level is the PnL scale; log-diffs are ~1/5000th of it)
-        p_lvl = np.exp(px)
+    ds, pxs = [], []
+    for leg in slot.legs:
+        px = np.where(leg.idx >= 0, u.logF[leg.com, np.clip(leg.idx, 0, None), tt], np.nan)
+        lvl = np.exp(px)
         d = np.zeros(T)
-        d[1:] = p_lvl[1:] - p_lvl[:-1]
+        d[1:] = lvl[1:] - lvl[:-1]           # CNY price change per point (NOT dlog)
         d = np.where(np.isfinite(d), d, 0.0)
         d[slot.block] = 0.0
-        return d
-
-    d_a, d_b = dp(px_a), dp(px_b)
+        ds.append(d)
+        pxs.append(lvl)
 
     pnl = np.zeros(T)
     margin_series = np.zeros(T)
@@ -545,15 +599,14 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
     for t in range(1, T):
         p = pos[t - 1]
         churn = abs(p - prev)
-        pnl[t] = p * (lots_b * mult_b * d_b[t] - lots_a * mult_a * d_a[t])
+        pnl[t] = p * sum(leg.lots * leg.mult * leg.sign * ds[i][t]
+                         for i, leg in enumerate(slot.legs))
         if churn > 0:
-            pnl[t] -= churn * (lots_a * (fee_a + slot.slip_a)
-                               + lots_b * (fee_b + slot.slip_b))
+            pnl[t] -= churn * sum(leg.lots * (leg.fee + leg.slip) for leg in slot.legs)
         prev = p
-        if p != 0 and np.isfinite(px_a[t]) and np.isfinite(px_b[t]):
-            pa, pb = np.exp(px_a[t]), np.exp(px_b[t])
-            margin_series[t] = (lots_b * mult_b * pb * _margin_rate(u, slot, "b")
-                                + lots_a * mult_a * pa * _margin_rate(u, slot, "a")) / max(1.0, slot.cap)
+        if p != 0 and all(np.isfinite(px[t]) for px in pxs):
+            margin_series[t] = sum(leg.lots * leg.mult * pxs[i][t] * u.specs[leg.com].margin_rate
+                                   for i, leg in enumerate(slot.legs)) / max(1.0, slot.cap)
 
     held = np.zeros(T, dtype=bool)
     held[1:] = pos[:-1] != 0
@@ -568,17 +621,7 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
                       "margin_series": margin_series, "held": held}
 
 
-def _fee_per_leg(u: FuturesUniverse, slot: SpreadSlot, leg: str) -> float:
-    c = slot.com[0] if (slot.kind == "cal" or leg == "a") else slot.com[1]
-    return _fee_per_lot(u.specs[c])
-
-
 def _fee_per_lot(spec: CommoditySpec) -> float:
     if spec.fee_per_lot is not None:
         return spec.fee_per_lot
     return float(spec.fee_rate * spec.multiplier * spec.start_price)
-
-
-def _margin_rate(u: FuturesUniverse, slot: SpreadSlot, leg: str) -> float:
-    c = slot.com[0] if (slot.kind == "cal" or leg == "a") else slot.com[1]
-    return u.specs[c].margin_rate

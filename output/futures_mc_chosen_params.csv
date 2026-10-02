@@ -6,4 +6,4 @@ seed,mode,z_entry,z_exit,window,refit_every
 4011,ou,1.25,0.5,,20.0
 5011,ou,1.75,0.5,,60.0
 6011,auto,1.5,0.5,,
-7011,ou,1.25,0.5,,60.0
+7011,rolling,1.75,0.5,40.0,

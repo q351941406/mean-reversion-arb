@@ -149,7 +149,9 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
               f"植入跨品种协整对 {len(u.planted_cross)} 个")
         print(f"训练期 [0, {train_end})  测试期 [{train_end}, {cfg.n_days})")
         print(f"候选池: {len(rows)} 个价差 (跨期 {sum(r['kind']=='cal' for r in rows)}"
-              f" + 跨品种 {sum(r['kind']=='cross' for r in rows)}), 真回归 {sum(r['is_true'] for r in rows)} 个")
+              f" + 跨品种 {sum(r['kind']=='cross' for r in rows)}"
+              f" + 三腿中性 {sum(r['kind']=='combo' for r in rows)}),"
+              f" 真回归 {sum(r['is_true'] for r in rows)} 个")
 
         spec_df = pd.DataFrame([{
             "品种": s.code, "乘数": s.multiplier, "跳价": s.tick,
@@ -165,7 +167,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
         if slots:
             sel_df = pd.DataFrame([{
                 "入选": s.label, "类型": s.kind, "p值": f"{s.adf_or_eg_p:.2e}",
-                "半衰期": round(s.half_life, 1), "手数A:B": f"{s.lots_a}:{s.lots_b}",
+                "半衰期": round(s.half_life, 1),
+                "各腿手数": ":".join(str(l.lots) for l in s.legs),
                 "换月次数": s.roll_count,
                 "腿部均量(万手)": round(s.liq / 1e4, 1),
                 "真回归": s.is_true,
@@ -280,8 +283,11 @@ def plot_spread_signals(res, outdir):
     if s.kind == "cal":
         title = (f"{u.specs[s.com[0]].code} calendar spread "
                  f"vol-rank {s.ranks[0]}~{s.ranks[1]}")
+    elif s.kind == "combo":
+        codes = [u.specs[l.com].code for l in s.legs]
+        title = f"{codes[0]}~{codes[1]}~{codes[2]} 3-leg factor-neutral basket"
     else:
-        title = f"{u.specs[s.com[1]].code}~{u.specs[s.com[0]].code} cross (dominant legs)"
+        title = f"{u.specs[s.legs[1].com].code}~{u.specs[s.legs[0].com].code} cross (dominant legs)"
     fig, axes = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
     axes[0].plot(s.spread, lw=0.8, color="darkgreen")
     for r in np.where(u.roll_days[s.com[0]])[0]:

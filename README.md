@@ -20,7 +20,7 @@
 .venv/bin/python run.py --seed 42 --days 2000 --assets 50 --pairs 8
 ```
 
-> 期货版 MC 结果(8 宇宙样本外,含手续费/排名化滑点/算法换月/保证金约束):**四种配置全部 8/8 宇宙盈利**,平均年化 ~6.5–9%,最差宇宙 +0.7% 以上,平均回撤 -5%。详见 [docs/05](docs/05-futures.md)。
+> 期货版 MC 结果(8 宇宙样本外,含手续费/排名化滑点/算法换月/保证金约束;跨期+跨品种+三腿因子中性三类价差同炉):**四种配置全部 8/8 宇宙盈利**,平均年化 ~6–8%,平均回撤 -6%。详见 [docs/05](docs/05-futures.md)。
 
 输出保存在 `output/`:`universe_sample.png`(宇宙与断裂配对)、`signals_best_pair.png`(价差 / OU 带 / z-score 入场)、`equity_curves.png`(四策略净值)、`mc_oos_sharpe.png` 与 `mc_results.csv`(Monte Carlo)。
 
