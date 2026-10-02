@@ -336,11 +336,15 @@ class SyntheticProvider(DataProvider):
 def build_universe(ds: FuturesDataset, cfg: FuturesConfig) -> FuturesUniverse:
     """Align ANY provider's contract panel into the (n_com, n_mat, T) universe
     grid the pipeline consumes. Contracts are sorted by expiry per commodity;
-    commodities may have different contract counts (padded with NaN)."""
+    commodities may have different contract counts (padded with NaN). The
+    returned universe's cfg.n_days is aligned to the ACTUAL panel length
+    (external data decides its own sample length, not the CLI flag)."""
+    from dataclasses import replace as _dc_replace
     ds.validate()
+    T = ds.prices.shape[0]
+    cfg = _dc_replace(cfg, n_days=int(T))
     codes = list(ds.specs.index)
     n_com = len(codes)
-    T = ds.prices.shape[0]
     tt = np.arange(T)
 
     n_mat = 0

@@ -186,7 +186,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None):
     provider = provider or SyntheticProvider(cfg)
     ds = provider.load_dataset()
     u = build_universe(ds, cfg)
-    train_end = int(cfg.n_days * cfg.train_fraction)
+    cfg = u.cfg                            # n_days aligned to the actual panel
+    train_end = int(u.n_days * cfg.train_fraction)
     slots, rows = screen_candidates(u, train_end)
 
     if verbose:
