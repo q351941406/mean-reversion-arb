@@ -463,7 +463,7 @@ def run_sweep(args):
     to the simulator's assumptions?"""
     dims = [("frac_structural", [0.15, 0.30, 0.50]),
             ("basis_sigma_scale", [0.7, 1.0, 1.5]),
-            ("break_fraction", [0.2, 0.4, 0.6])]
+            ("basis_hl_scale", [0.5, 1.0, 2.0])]
     seeds_per = max(2, min(args.mc if args.mc else 3, 5))
     rows = []
     for dim, values in dims:

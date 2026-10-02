@@ -8,16 +8,18 @@
 - **中国商品期货管道**(`frun.py`):期限结构 + carry + 换月 + 手数/乘数/手续费/保证金账户层,跨期 + 跨品种价差语义,**算法自动发现价差,不预设品种**。
 
 ```bash
-# 期货版(中国商品期货语义: 期限结构+换月+手数化账户, 算法自动发现价差)
+# 期货版(中国商品期货语义: 期限结构+算法换月+手数化账户, 跨期/跨品种/三腿中性算法发现)
 .venv/bin/python frun.py --seed 11            # 单次全流程
-.venv/bin/python frun.py --mc 8 --seed 11     # Monte Carlo
+.venv/bin/python frun.py --mc 30 --seed 11    # Monte Carlo 30 宇宙
+.venv/bin/python frun.py --hostile            # 敌意生成器: 策略未建模的价差动态
+.venv/bin/python frun.py --sweep              # 生成器参数扫描(单因素敏感性)
 
 # 股票式(方法论验证沙盘)
 .venv/bin/python run.py --seed 7
 .venv/bin/python run.py --mc 12
 
-# 自定义宇宙规模
-.venv/bin/python run.py --seed 42 --days 2000 --assets 50 --pairs 8
+# 测试(10 项: PnL恒等式 / 扰动PIT不变性 / 组合层)
+.venv/bin/python -m unittest tests.test_mrarb -v
 ```
 
 > 期货版 MC 结果(8 宇宙样本外,含手续费/排名化滑点/算法换月/保证金约束;跨期+跨品种+三腿因子中性三类价差同炉):**四种配置全部 8/8 宇宙盈利**,平均年化 ~6–8%,平均回撤 -6%。详见 [docs/05](docs/05-futures.md)。
@@ -32,7 +34,8 @@
 | [02 · 方法论](docs/02-methodology.md) | 合成器数学设定、OU 校准推导、Kalman 对冲、交易规则状态机、回测口径 |
 | [03 · 实验记录](docs/03-experiments.md) | 全部实测结果、Monte Carlo 汇总、开发中的三个教训(含踩坑细节) |
 | [04 · 真实数据接入](docs/04-real-data-guide.md) | 十分钟接入真实数据、合成器校准、升级路线与实盘 checklist |
-| [05 · 期货化](docs/05-futures.md) | 中国商品期货语义:期限结构/换月/手数化账户、跨期+跨品种算法发现、期货版实验结果 |
+| [05 · 期货化](docs/05-futures.md) | 中国商品期货语义:期限结构/换月/手数化账户、三类价差(跨期/跨品种/三腿中性)算法发现、未来函数审计 |
+| [06 · 稳健性与测试](docs/06-robustness.md) | 正确性测试套件(PnL恒等式/扰动PIT检测)、组合层风控(净敞口/ERC)、敌意生成器实验、参数扫描、Deflated Sharpe |
 
 ## 文献依据(arXiv)
 
@@ -130,8 +133,10 @@ mrarb/
   ou.py          # OU AR(1) 校准 + Kalman 动态对冲比率
   strategy.py    # 价差/z-score/仓位状态机(点内,无前视)
   backtest.py    # 次日执行回测 + 绩效/逐笔统计
-  futures.py     # 期货化:期限结构/换月合成器 + 跨期跨品种发现 + 手数化回测
+  futures.py     # 期货化:合约带/量能/算法换月合成器 + 三类价差发现 + N腿回测
+  portfolio.py   # 组合层:净敞口核算与限额 + ERC仓位 + Deflated Sharpe
 run.py           # 股票式管道入口(CLI)
-frun.py          # 期货管道入口(CLI)
-output/          # 图表与 MC 结果
+frun.py          # 期货管道入口(CLI: 单次/MC/敌意生成器/参数扫描)
+tests/           # 正确性测试:PnL恒等式、扰动PIT不变性、组合层
+output/          # 图表与实验结果
 ```

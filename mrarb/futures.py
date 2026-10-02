@@ -60,6 +60,7 @@ class FuturesConfig:
     roll_margin: float = 0.20      # challenger needs +20% volume to take dominance
     adversarial: str = "none"      # none|regime|garch|seasonal|jump (healthy basis dynamics)
     basis_sigma_scale: float = 1.0  # scales the healthy basis vol (sensitivity knob)
+    basis_hl_scale: float = 1.0     # scales the healthy basis half-life (sensitivity knob)
     vol_floor_liq: float = 3.0e4   # liquidity floor: avg daily lots of the thin leg
     frac_structural: float = 0.3
     n_planted_cross: int = 3
@@ -157,7 +158,7 @@ def _hostile_basis(rng, T: int, cfg: FuturesConfig, sigma_eq: float) -> np.ndarr
     strategy does not model. 'none' is the clean OU the strategy assumes.
     """
     mode = cfg.adversarial
-    kappa = np.log(2.0) / float(rng.uniform(*cfg.basis_hl_range))
+    kappa = np.log(2.0) / (float(rng.uniform(*cfg.basis_hl_range)) * cfg.basis_hl_scale)
     sigma_eq *= cfg.basis_sigma_scale
     if mode == "garch":
         # OU with GARCH(1,1) innovation vol: vol-of-vol the z-score ignores
