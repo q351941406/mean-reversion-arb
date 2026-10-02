@@ -203,8 +203,10 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
         # sandbox-calibrated and over-reject real spreads.
         import dataclasses
         cfg = dataclasses.replace(cfg, listing_span=10 ** 6,
-                                  stability_th=0.30, hl_hi=150,
-                                  vol_floor_liq=1.0e4)
+                                  stability_th=1.01,  # OFF: walk-forward showed
+                                  # it empties the screen (3/5 folds 0 slots);
+                                  # hl/p/vol gates + stop rules carry the load
+                                  hl_hi=150, vol_floor_liq=1.0e4)
     if book == "calendar":
         # Small-account book (1 lot per leg): liquidity is a non-constraint on
         # dominant/next contracts, only fast 1:1-hedged calendar spreads are
@@ -562,6 +564,80 @@ def make_provider(args):
     raise ValueError(f"unknown provider {args.provider}")
 
 
+def run_walkforward(args):
+    """Rolling-origin evaluation: no single fixed split. Each fold re-screens
+    and re-tunes on its own train window, then is scored ONLY on the next
+    `test_days` bars. Reports the distribution across folds instead of one
+    draw (answers the fixed-window criticism honestly)."""
+    cfg0 = FuturesConfig(seed=args.seed, n_days=args.days)
+    provider = make_provider(args)
+    ds = provider.load_dataset()
+    if getattr(provider, "name", "synthetic") != "synthetic":
+        import dataclasses
+        cfg0 = dataclasses.replace(cfg0, listing_span=10 ** 6,
+                                   stability_th=0.30, hl_hi=150,
+                                   vol_floor_liq=1.0e4)
+    if args.book == "calendar":
+        import dataclasses
+        cfg0 = dataclasses.replace(cfg0, vol_floor_liq=1.0e3, hl_lo=5.0,
+                                   hl_hi=60.0, max_slots=8, max_cal_slots=8)
+    u = build_universe(ds, cfg0)
+    n = u.n_days
+    test_days = args.wf_test
+    starts = list(range(args.wf_train, n - test_days + 1, args.wf_step))
+    if not starts or starts[-1] != n - test_days:
+        starts.append(n - test_days)
+    print(f"\n--- Walk-forward: {len(starts)} 折叠 (train {args.wf_train} 天, "
+          f"test {test_days} 天, 步长 {args.wf_step}) | 数据源 "
+          f"{getattr(provider, 'name', 'synthetic')} | book={args.book} ---")
+    rows = []
+    for k, te in enumerate(starts):
+        slots, _rows = screen_candidates(u, te)
+        if args.book == "calendar":
+            slots = [s for s in slots if s.kind == "cal"]
+        if not slots:
+            print(f"  fold {k + 1} (train {te}): 0 槽位, 跳过")
+            continue
+        # fixed (pre-registered) configs + per-fold tuned pick
+        configs = {"rolling20": StratParams(mode="rolling", window=20),
+                   "ou_default": StratParams(mode="ou"),
+                   "auto": StratParams(mode="auto")}
+        tune_best, tune_sh, tune_p = None, -np.inf, None
+        for g in GRID:
+            p_ = make_params(**g)
+            port_, _ps, m_tr_, _te_, n_tr_, _a = eval_portfolio(u, slots, p_, te)
+            if n_tr_ >= max(5, te // 25) and np.isfinite(m_tr_["sharpe"]) and m_tr_["sharpe"] > tune_sh:
+                tune_sh, tune_p = m_tr_["sharpe"], p_
+        if tune_p is not None:
+            configs["tuned"] = tune_p
+        for name, p_ in configs.items():
+            port, _ps, _mtr, _mte, _n, _a = eval_portfolio(u, slots, p_, te)
+            m_fold = perf_stats(port.iloc[te:te + test_days])
+            rows.append({"fold": k + 1, "train_end": te, "slots": len(slots),
+                         "strategy": name,
+                         "OOS_sharpe": m_fold["sharpe"],
+                         "OOS_ann%": 100 * m_fold["ann_ret"],
+                         "OOS_dd%": 100 * m_fold["max_dd"]})
+        print(f"  fold {k + 1}: train[0,{te}) test[{te},{te + test_days}) "
+              f"slots={len(slots)}", flush=True)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        print("无折叠结果")
+        return
+    piv = df.pivot_table(index="fold", columns="strategy",
+                         values="OOS_sharpe").round(2)
+    print("\n各折叠 OOS Sharpe:")
+    print(piv.to_string())
+    agg = df.groupby("strategy").agg(
+        Sharpe均值=("OOS_sharpe", "mean"), Sharpe中位=("OOS_sharpe", "median"),
+        正折叠比例=("OOS_sharpe", lambda x: (x > 0).mean()),
+        年化均值=("OOS_ann%", "mean"), 年化最差=("OOS_ann%", "min"),
+        回撤均值=("OOS_dd%", "mean")).round(2)
+    print("\n汇总(跨折叠分布 —— 不再依赖单一 60/40 切分):")
+    print(agg.to_string())
+    df.to_csv(os.path.join(args.outdir, "walkforward_results.csv"), index=False)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Futures mean-reversion arb on synthetic futures data")
     ap.add_argument("--seed", type=int, default=11)
@@ -583,6 +659,11 @@ def main():
                     help="write the synthetic dataset to --data-dir")
     ap.add_argument("--export-format", choices=["parquet", "csv"], default="parquet",
                     help="export format (parquet recommended)")
+    ap.add_argument("--walkforward", action="store_true",
+                    help="rolling-origin evaluation (no fixed split)")
+    ap.add_argument("--wf-train", type=int, default=375)
+    ap.add_argument("--wf-test", type=int, default=125)
+    ap.add_argument("--wf-step", type=int, default=116)
     ap.add_argument("--hostile", action="store_true",
                     help="adversarial generator experiment (regime/garch/seasonal/jump)")
     ap.add_argument("--sweep", action="store_true",
@@ -603,6 +684,9 @@ def main():
             ext = "csv"
         print(f"样本数据已写入 {args.data_dir}/ (specs/contracts/prices/volume.{ext})\n"
               f"验证: .venv/bin/python frun.py --provider {args.export_format} --data-dir {args.data_dir}")
+        return
+    if args.walkforward:
+        run_walkforward(args)
         return
     if args.hostile:
         run_hostile(args)
