@@ -1,0 +1,31 @@
+[fuyao+sina] 枚举 408 个历史合约 (2020-01-01 ~ 2023-04-01); 逐合约拉取新浪日线...
+  ... 40/408 (miss 1)
+  ... 80/408 (miss 2)
+  ... 120/408 (miss 4)
+  ... 160/408 (miss 5)
+  ... 200/408 (miss 8)
+  ... 240/408 (miss 8)
+  ... 280/408 (miss 12)
+  ... 320/408 (miss 14)
+  ... 360/408 (miss 14)
+  ... 400/408 (miss 15)
+[fuyao+sina] 缓存到 data/fuyao_holdout/ (787 天 x 393 合约, 枚举未命中 15)
+holdout panel: 787 天 (2020-01-02 ~ 2023-03-31), 12 品种
+fold 1: train[0,375) test[375,500) slots=['L 主力~次到期', 'P 主力~次到期', 'CU 主力~次到期', 'RB 主力~次到期']
+fold 2: train[0,490) test[490,615) slots=['L 主力~次到期', 'P 主力~次到期', 'CU 主力~次到期']
+fold 3: train[0,605) test[605,730) slots=['RB 主力~次到期', 'PP 主力~次到期', 'L 主力~次到期', 'I 主力~隔月']
+fold 4: train[0,662) test[662,787) slots=['RB 主力~隔月', 'PP 主力~次到期', 'L 主力~次到期']
+
+per-fold (frozen config):
+cost  fee x1  fee x2
+fold                
+1       2.93    2.92
+2       0.99    0.98
+3      -0.54   -0.60
+4       0.45    0.39
+
+aggregate:
+        sharpe_mean  sharpe_min  sharpe_max   pos  ann_mean  dd_mean
+cost                                                                
+fee x1         0.96       -0.54        2.93  0.75      5.62    -3.27
+fee x2         0.92       -0.60        2.92  0.75      5.45    -3.28

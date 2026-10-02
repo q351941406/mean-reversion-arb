@@ -75,7 +75,8 @@ def make_params(**kw) -> StratParams:
     return p
 
 
-def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: int):
+def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: int,
+                   cost_mult: float = 1.0):
     """Backtest all slots unlevered, then the portfolio layer:
 
     1. margin-budget x utilization leverage + per-slot vol cap (train est.):
@@ -90,7 +91,8 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
     unlevered, positions, infos = [], [], []
     n_trades_train = 0
     for s in slots:
-        ret, pos, info = backtest_slot(u, s, params, margin_target=None)
+        ret, pos, info = backtest_slot(u, s, params, margin_target=None,
+                                       cost_mult=cost_mult)
         unlevered.append(ret)
         positions.append(pos)
         infos.append(info)
