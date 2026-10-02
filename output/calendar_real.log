@@ -1,0 +1,378 @@
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:549: RuntimeWarning: All-NaN axis encountered
+  return float(np.nanmin([_leg_avg_vol(u, c, _leg(u, c, r)[0], tr)
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:687: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p = adfuller(y - Xs[0], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:760: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p1 = adfuller(spread_train[:h], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/futures.py:761: FutureWarning: adfuller currently returns a plain tuple whose length depends on the store and autolag arguments. In release 0.16 or after July 2027, whichever is later, the default behavior will switch to always returning an ADFullerResult. Set result_object=True to switch now, or result_object=False to keep the current behavior and silence this warning.
+  p2 = adfuller(spread_train[h:], autolag="AIC")[1]
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:108: RuntimeWarning: divide by zero encountered in divide
+  x0 = (1.0 / np.sqrt(np.diag(C)))
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:109: RuntimeWarning: invalid value encountered in divide
+  x0 = x0 / x0.sum()
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:130: RuntimeWarning: divide by zero encountered in divide
+  w = 1.0 / vol
+/Users/ganzhengwei/Desktop/object/量化/test/mrarb/portfolio.py:131: RuntimeWarning: invalid value encountered in divide
+  return w / w.sum()
+
+============================================================================
+期货宇宙: 12 个品种 / 849 天 / 数据源 fuyao / 种子 11
+合约带: 各品种独立到期间隔 + ~1000000 天挂牌窗口, 任意时刻同时挂牌多个合约
+移仓换月: 主力 = 滚动成交量最大者(5日平滑), 主力切换即换月 — 样本内各品种换月 0~19 次
+ground truth: 无(外部数据源, '真回归'列显示为 ?)
+训练期 [0, 509)  测试期 [509, 849)
+候选池: 51 个价差 (跨期 15 + 跨品种 36 + 三腿中性 0), 真回归 0 个; BH-FDR(q=0.10) 后显著 2 个
+
+--- 品种规格 ---
+品种    乘数   跳价    手续费  保证金% 到期间隔天 活跃度(万手/日)  换月次数 价差健康
+RB  10.0  1.0 1.0万分比     9     -         -    12    ?
+HC  10.0  1.0 1.0万分比     9     -         -     7    ?
+ I 100.0  0.5 1.0万分比    10     -         -    14    ?
+CU   5.0 10.0 0.5万分比    11     -         -    14    ?
+AL   5.0  5.0 3.0元/手    11     -         -    14    ?
+ZN   5.0  5.0 3.0元/手    11     -         -     0    ?
+ Y  10.0  1.0 2.5元/手    10     -         -     0    ?
+ P  10.0  1.0 2.5元/手    11     -         -    17    ?
+OI  10.0  1.0 2.0元/手     9     -         -     7    ?
+ L   5.0  1.0 1.0元/手    10     -         -    19    ?
+PP   5.0  1.0 1.0元/手    10     -         -    16    ?
+ V   5.0  1.0 1.0元/手    10     -         -     0    ?
+
+--- 算法发现(仅训练期: 平稳性+稳定性+半衰期+流动性门槛, ≤8 槽) ---
+      入选  类型       p值  半衰期 各腿手数  换月次数  腿部均量(万手) 真回归
+I 主力~次到期 cal 1.78e-07 11.9  1:1    16       2.4   ?
+HC 主力~隔月 cal 2.00e-02 37.2  1:1     9      11.9   ?
+
+--- 阈值网格(仅训练期 Sharpe 目标, ≥15 笔)---
+   mode  z_entry  z_exit  refit_every  refit_window  IS_sharpe  trades deseasonal  window
+     ou     1.25     0.0         60.0         250.0      -0.23      10        NaN     NaN
+     ou     1.25     0.0         20.0         120.0       0.19      15        NaN     NaN
+     ou     1.25     0.5         60.0         250.0      -0.28      10        NaN     NaN
+     ou     1.25     0.5         20.0         120.0       0.62      31        NaN     NaN
+     ou     1.75     0.0         60.0         250.0      -0.33       5        NaN     NaN
+     ou     1.75     0.0         20.0         120.0      -0.21      11        NaN     NaN
+     ou     1.75     0.5         60.0         250.0      -0.33       5        NaN     NaN
+     ou     1.75     0.5         20.0         120.0       0.29      17        NaN     NaN
+     ou     2.25     0.0         60.0         250.0       0.02       4        NaN     NaN
+     ou     2.25     0.0         20.0         120.0       0.85      11        NaN     NaN
+     ou     2.25     0.5         60.0         250.0       0.02       4        NaN     NaN
+     ou     2.25     0.5         20.0         120.0       0.46      14        NaN     NaN
+     ou     1.25     0.0         60.0         500.0       0.36       1       True     NaN
+     ou     1.25     0.5         60.0         500.0       0.36       1       True     NaN
+     ou     1.75     0.0         60.0         500.0       0.36       1       True     NaN
+     ou     1.75     0.5         60.0         500.0       0.36       1       True     NaN
+     ou     2.25     0.0         60.0         500.0        NaN       0       True     NaN
+     ou     2.25     0.5         60.0         500.0        NaN       0       True     NaN
+rolling     1.25     0.5          NaN           NaN       1.90     107        NaN    20.0
+rolling     1.75     0.5          NaN           NaN       1.58      53        NaN    20.0
+rolling     1.25     0.5          NaN           NaN       1.35      85        NaN    30.0
+rolling     1.75     0.5          NaN           NaN       0.90      44        NaN    30.0
+rolling     1.25     0.5          NaN           NaN       1.10      61        NaN    40.0
+rolling     1.75     0.5          NaN           NaN       0.69      33        NaN    40.0
+   auto     1.50     0.0         60.0         250.0      -0.28       9        NaN     NaN
+   auto     1.50     0.5         60.0         250.0      -0.39       9        NaN     NaN
+   auto     1.75     0.0         60.0         250.0      -0.33       5        NaN     NaN
+   auto     1.75     0.5         60.0         250.0      -0.33       5        NaN     NaN
+   auto     2.00     0.0         60.0         250.0      -0.33       5        NaN     NaN
+   auto     2.00     0.5         60.0         250.0      -0.33       5        NaN     NaN
+   auto     1.50     0.5         60.0         500.0       0.36       1       True     NaN
+   auto     1.75     0.5         60.0         500.0       0.36       1       True     NaN
+选中参数: rolling z entry=1.25 exit=0.5 window=20 (train Sharpe 1.90)
+账户保证金: 平均 35% / 峰值 95% (预算 90%) | 组合净敞口: 训练期 46% / 全样本 9% (限额 100%, 因限额裁撤 0 槽)
+Deflated Sharpe (N=32 次试验折减): 0.82
+
+--- 策略对比(等分保证金预算 90%×利用率调整, ERC加权, 换月强平, 含手续费与滑点)---
+                          策略  IS夏普  OOS夏普  OOS年化%  OOS回撤%  OOS交易数
+          rolling z baseline  0.90   0.60    2.74   -3.25      34
+       OU z (default thres.) -0.33  -1.09   -4.19   -6.89       9
+auto: OU-cal / rolling-cross -0.33  -1.09   -4.19   -6.89       9
+     grid-tuned (train pick)  1.90   1.26    6.54   -3.65      70
+
+--- 分槽位明细(调参后 OU 策略, 测试期)---
+      槽位  类型 真回归  训练夏普  杠杆x  利用率%  换月次数  OOS夏普  OOS年化%  OOS回撤%  交易数  逐笔胜率%  平均持仓天
+I 主力~次到期 cal   ?  0.87  4.2  50.0    16   1.13   10.61   -7.47   32   37.5    4.9
+HC 主力~隔月 cal   ?  1.77  4.2  42.0     9   0.61    2.88   -3.42   38   28.9    4.4

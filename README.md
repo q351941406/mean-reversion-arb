@@ -25,6 +25,7 @@
 export FUYAO_API_KEY=sk-...   # .env 亦可, 已 gitignore
 .venv/bin/python frun.py --provider fuyao --data-dir data/fuyao               # 首次拉取并缓存 parquet
 .venv/bin/python frun.py --provider fuyao --data-dir data/fuyao               # 之后走缓存
+.venv/bin/python frun.py --provider fuyao --data-dir data/fuyao --book calendar  # 小资金纯跨期账本(一手交易)
 
 # 测试(14 项: PnL恒等式 / 扰动PIT不变性 / 组合层 / 数据适配器CSV+Parquet / LiveRunner)
 .venv/bin/python -m unittest tests.test_mrarb -v
@@ -46,6 +47,7 @@ export FUYAO_API_KEY=sk-...   # .env 亦可, 已 gitignore
 | [06 · 稳健性与测试](docs/06-robustness.md) | 正确性测试套件(PnL恒等式/扰动PIT检测)、组合层风控(净敞口/ERC)、敌意生成器实验、参数扫描、Deflated Sharpe |
 | [07 · 数据适配层](docs/07-data-adapters.md) | 数据契约与 Provider 接口、Parquet/CSV 格式规范、akshare 模板、实盘骨架(LiveRunner)——切换数据源 = 实现一个 load_dataset |
 | [08 · 第一次真实数据运行](docs/08-first-real-run.md) | fuyao+新浪混合源、真实数据 5 个坑、发现层命中经典价差、OOS 负结果的诚实记录 |
+| [09 · 小资金纯跨期账本](docs/09-small-account.md) | 一手交易的账本设计(`--book calendar`)、真实面板 +6.5%/回撤-3.7%、一手实务账、纸面跟踪建议 |
 
 ## 文献依据(arXiv)
 

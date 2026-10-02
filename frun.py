@@ -192,7 +192,8 @@ def true_count(slots) -> int:
     return sum(1 for s in slots if s.is_true is True)
 
 
-def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None):
+def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
+                 book: str = "all"):
     provider = provider or SyntheticProvider(cfg)
     ds = provider.load_dataset()
     if getattr(provider, "name", "synthetic") != "synthetic":
@@ -204,10 +205,20 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None):
         cfg = dataclasses.replace(cfg, listing_span=10 ** 6,
                                   stability_th=0.30, hl_hi=150,
                                   vol_floor_liq=1.0e4)
+    if book == "calendar":
+        # Small-account book (1 lot per leg): liquidity is a non-constraint on
+        # dominant/next contracts, only fast 1:1-hedged calendar spreads are
+        # traded (both evidence sources agree they carry the alpha), and no
+        # grid tuning - fixed thresholds to keep researcher dof minimal.
+        import dataclasses
+        cfg = dataclasses.replace(cfg, vol_floor_liq=1.0e3, hl_lo=5.0, hl_hi=60.0,
+                                  max_slots=8, max_cal_slots=8)
     u = build_universe(ds, cfg)
     cfg = u.cfg                            # n_days aligned to the actual panel
     train_end = int(u.n_days * cfg.train_fraction)
     slots, rows = screen_candidates(u, train_end)
+    if book == "calendar":
+        slots = [s for s in slots if s.kind == "cal"]
 
     if verbose:
         n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
@@ -422,7 +433,7 @@ def run_monte_carlo(args):
     for k in range(args.mc):
         seed = args.seed + 1000 * k
         cfg = FuturesConfig(seed=seed, n_days=args.days)
-        res = run_pipeline(cfg, verbose=False)
+        res = run_pipeline(cfg, verbose=False, book=getattr(args, "book", "all"))
         for name in ("rolling", "ou", "auto", "ou_tuned"):
             m_te = res["strategies"][name]["m_te"]
             rows.append({"seed": seed, "strategy": MODE_LABEL_EN[name],
@@ -564,6 +575,9 @@ def main():
                     help="sample start date for --provider fuyao")
     ap.add_argument("--refresh", action="store_true",
                     help="fuyao provider: re-download even if cache exists")
+    ap.add_argument("--book", choices=["all", "calendar"], default="all",
+                    help="calendar = small-account book: 1:1-hedged calendar "
+                         "spreads only, no liquidity gate, fast hl range")
     ap.add_argument("--data-dir", type=str, default="data/sample")
     ap.add_argument("--export-sample", action="store_true",
                     help="write the synthetic dataset to --data-dir")
@@ -601,7 +615,7 @@ def main():
         return
 
     cfg = FuturesConfig(seed=args.seed, n_days=args.days)
-    res = run_pipeline(cfg, provider=make_provider(args))
+    res = run_pipeline(cfg, provider=make_provider(args), book=args.book)
     report_slots(res)
     if not args.no_plots:
         plot_term_structure(res, args.outdir)
