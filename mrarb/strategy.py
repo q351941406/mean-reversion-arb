@@ -33,7 +33,7 @@ def _rolling_z(spread: pd.Series, window: int) -> np.ndarray:
 
 
 def position_from_z(z, params: StratParams, max_hold: int,
-                    block=None) -> np.ndarray:
+                    block=None, z_exit: float = None) -> np.ndarray:
     """Shared position state machine.
 
     Enter at |z|>=z_entry, exit at |z|<=z_exit, stop at |z|>=z_stop or after
@@ -68,10 +68,11 @@ def position_from_z(z, params: StratParams, max_hold: int,
                     cur, hold = -1, 0
         else:
             hold += 1
+            z_x = params.z_exit if z_exit is None else z_exit
             if abs(zt) >= params.z_stop:
                 cur, armed = 0, False         # stopped out: wait for re-entry
-            elif abs(zt) <= params.z_exit or hold >= max_hold:
-                cur, armed = 0, abs(zt) <= params.z_exit
+            elif abs(zt) <= z_x or hold >= max_hold:
+                cur, armed = 0, abs(zt) <= z_x
         pos[t] = cur
     return pos
 

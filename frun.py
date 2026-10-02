@@ -37,6 +37,7 @@ from mrarb.portfolio import (benjamini_hochberg, deflated_sharpe,
 MODE_LABEL_EN = {
     "rolling": "rolling z baseline",
     "ou": "OU z (default thres.)",
+    "ou_opt": "OU z + Leung-Li opt exit",
     "auto": "auto: OU-cal / rolling-cross",
     "ou_tuned": "grid-tuned (train pick)",
 }
@@ -92,7 +93,7 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
     n_trades_train = 0
     for s in slots:
         ret, pos, info = backtest_slot(u, s, params, margin_target=None,
-                                       cost_mult=cost_mult)
+                                       cost_mult=cost_mult, train_end=train_end)
         unlevered.append(ret)
         positions.append(pos)
         infos.append(info)
@@ -274,7 +275,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
 
     # ---- strategies: fixed defaults (rolling / OU / auto) + grid-tuned pick ----
     strategies = {"rolling": StratParams(mode="rolling"), "ou": StratParams(mode="ou"),
-                  "auto": StratParams(mode="auto")}
+                  "auto": StratParams(mode="auto"),
+                  "ou_opt": StratParams(mode="ou", opt_exit=True)}
     tune_rows = []
     best_sharpe, best_params, best_port_train = -np.inf, None, None
     for g in GRID:
@@ -288,7 +290,7 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
 
     results = {"universe": u, "slots": slots, "train_end": train_end,
                "strategies": {}, "metrics": [], "chosen_params": best_params}
-    for name in ("rolling", "ou", "auto", "ou_tuned"):
+    for name in ("rolling", "ou", "ou_opt", "auto", "ou_tuned"):
         port, per_slot, m_tr, m_te, _n, acct = eval_portfolio(u, slots, strategies[name], train_end)
         results["strategies"][name] = {"params": strategies[name], "port": port,
                                        "per_slot": per_slot, "m_tr": m_tr, "m_te": m_te,
@@ -420,7 +422,7 @@ def plot_spread_signals(res, outdir):
 def plot_equity(res, outdir):
     train_end = res["train_end"]
     fig, ax = plt.subplots(figsize=(11, 5))
-    for name in ("rolling", "ou", "auto", "ou_tuned"):
+    for name in ("rolling", "ou", "ou_opt", "auto", "ou_tuned"):
         eq = (1 + res["strategies"][name]["port"]).cumprod()
         ax.plot(eq.index, eq.values, lw=1.1, label=MODE_LABEL_EN[name])
     ax.axvline(train_end, color="red", ls="--", lw=1, label="train | test")
@@ -438,7 +440,7 @@ def run_monte_carlo(args):
         seed = args.seed + 1000 * k
         cfg = FuturesConfig(seed=seed, n_days=args.days)
         res = run_pipeline(cfg, verbose=False, book=getattr(args, "book", "all"))
-        for name in ("rolling", "ou", "auto", "ou_tuned"):
+        for name in ("rolling", "ou", "ou_opt", "auto", "ou_tuned"):
             m_te = res["strategies"][name]["m_te"]
             rows.append({"seed": seed, "strategy": MODE_LABEL_EN[name],
                          "n_slots": len(res["slots"]),
@@ -466,7 +468,7 @@ def run_monte_carlo(args):
     print(pd.DataFrame(chosen).to_string(index=False))
 
     fig, ax = plt.subplots(figsize=(9.5, 5))
-    order = ["rolling", "ou", "auto", "ou_tuned"]
+    order = ["rolling", "ou", "ou_opt", "auto", "ou_tuned"]
     data = [df.loc[df.strategy == MODE_LABEL_EN[m], "OOS_sharpe"].dropna().values for m in order]
     ax.boxplot(data)
     ax.set_xticks(range(1, len(order) + 1))

@@ -73,6 +73,8 @@ class StratParams:
                                         # only when train Sharpe says so.
     seasonal_period: float = 365.0      # days per seasonal cycle
     seasonal_harmonics: int = 2
+    opt_exit: bool = False              # Leung-Li (1411.5062) optimal take-profit
+                                        # replaces the fixed z_exit (cost-aware)
 
 
 @dataclass

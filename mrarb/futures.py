@@ -800,9 +800,11 @@ def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
 # lot-based backtest with rank-aware slippage / fees / rollover
 # --------------------------------------------------------------------------
 
-def slot_positions(u: FuturesUniverse, slot: SpreadSlot, params: StratParams):
+def slot_positions(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
+                   train_end: int = None):
     """z & target positions for one slot (factored out so PIT tests can call
-    it against a perturbed universe)."""
+    it against a perturbed universe). train_end enables the Leung-Li optimal
+    exit (fitted on the train window only)."""
     eff_mode = params.mode
     if params.mode == "auto":
         eff_mode = "rolling" if slot.kind in ("cross", "combo") else "ou"
@@ -812,20 +814,30 @@ def slot_positions(u: FuturesUniverse, slot: SpreadSlot, params: StratParams):
         z = ou_z_seasonal(slot.spread_adj, params)
     else:
         z = ou_z_point_in_time(slot.spread_adj, params)
+    z_x = None
+    if params.opt_exit and train_end is not None:
+        from mrarb.ou import fit_ou, optimal_exit_z
+        win = slot.spread_adj[:train_end]
+        fin = np.isfinite(win)
+        fit = fit_ou(win[fin]) if fin.any() else None
+        if fit is not None and fit.valid:
+            c_side = sum(lg.fee + lg.slip for lg in slot.legs) / max(1.0, slot.cap)
+            z_x = optimal_exit_z(fit.sigma_eq, fit.half_life, fit.mu,
+                                 c_side, params.z_stop)
     max_hold = int(np.ceil(params.hold_mult * slot.half_life))
-    return z, position_from_z(z, params, max_hold, block=slot.block)
+    return z, position_from_z(z, params, max_hold, block=slot.block, z_exit=z_x)
 
 
 def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
                   cost_mult: float = 1.0, margin_target: float | None = None,
-                  lev_cap: float = 4.0):
+                  lev_cap: float = 4.0, train_end: int | None = None):
     """OU/rolling signals + N-leg lot accounting for one spread slot. Signals
     run on the back-adjusted spread; PnL on raw legs (CNY price diffs), where
     a rollover day earns the OLD contract's price change (you roll at that
     day's close), so splice jumps never enter the account. Slippage per leg
     scales with its volume rank."""
     T = u.cfg.n_days
-    z, pos = slot_positions(u, slot, params)
+    z, pos = slot_positions(u, slot, params, train_end=train_end)
 
     tt = np.arange(T)
     ds, pxs, switched = [], [], []

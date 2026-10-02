@@ -1,0 +1,12 @@
+window A (2023-26 full split):
+  rolling20        OOS sharpe=  1.26 ann=  6.54% dd= -3.65%
+  rolling20+optX   OOS sharpe= -0.31 ann= -1.27% dd= -5.12%
+  ou+optX          OOS sharpe= -1.65 ann= -6.34% dd= -9.14%
+window B (2023-26 walk-forward):
+  rolling20        folds=[-0.98, 2.04, 0.48, 1.67] mean=  0.81 pos=75%
+  rolling20+optX   folds=[-0.4, 1.63, -0.72, -0.15] mean=  0.09 pos=25%
+  ou+optX          folds=[-1.46, nan, -2.67, 2.6] mean=   nan pos=25%
+window C (2020-23 holdout, 787d):
+  rolling20        folds=[2.93, 0.99, -0.54, 0.45] mean=  0.96 ann_mean=  5.62% pos=75%
+  rolling20+optX   folds=[3.86, -1.69, -0.03, -1.18] mean=  0.24 ann_mean=  0.43% pos=25%
+  ou+optX          folds=[2.98, -2.9, -1.44, -0.75] mean= -0.53 ann_mean= -1.65% pos=25%
