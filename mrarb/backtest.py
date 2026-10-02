@@ -53,13 +53,14 @@ def perf_stats(ret: pd.Series, freq: int = 252) -> dict:
     sortino = ann_ret / downside if downside and downside > 0 else np.nan
     eq = (1.0 + r).cumprod()
     max_dd = float((eq / eq.cummax() - 1.0).min())
+    active = r[r != 0]                      # daily win rate over ACTIVE days
     return {
         "ann_ret": float(ann_ret),
         "ann_vol": float(ann_vol),
         "sharpe": float(sharpe),
         "sortino": float(sortino),
         "max_dd": max_dd,
-        "win_rate": float((r > 0).mean()),
+        "win_rate": float((active > 0).mean()) if len(active) else np.nan,
         "total_ret": float(eq.iloc[-1] - 1.0),
         "n_obs": int(len(r)),
     }

@@ -28,6 +28,8 @@ from mrarb.backtest import perf_stats, portfolio_return, trade_stats
 from mrarb.config import StratParams
 from mrarb.futures import (FuturesConfig, SpreadSlot, backtest_slot,
                            screen_candidates, simulate_futures)
+from mrarb.portfolio import (benjamini_hochberg, deflated_sharpe,
+                             enforce_net_cap, erc_weights, net_exposure)
 
 MODE_LABEL_EN = {
     "rolling": "rolling z baseline",
@@ -37,6 +39,8 @@ MODE_LABEL_EN = {
 }
 MARGIN_BUDGET = 0.90   # total margin budget as fraction of account capital
 LEV_CAP = 5.0          # per-slot notional leverage cap
+VOL_CAP = 0.15         # per-slot capital vol cap (annualized, train-estimated)
+NET_CAP_FRAC = 1.0     # per-commodity net exposure cap (x total account capital)
 VOL_CAP = 0.15         # per-slot capital vol cap (annualized, train-estimated)
 
 # threshold grid, tuned on the TRAIN window per universe
@@ -60,16 +64,16 @@ def make_params(**kw) -> StratParams:
 
 
 def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: int):
-    """Backtest all slots unlevered, then size each slot so that the ACCOUNT
-    margin averages MARGIN_BUDGET of capital:
+    """Backtest all slots unlevered, then the portfolio layer:
 
-        lev_i = (MARGIN_BUDGET / n_slots) / (margin_frac_i * util_i)
+    1. margin-budget x utilization leverage + per-slot vol cap (train est.):
+       lev_i = min(LEV_CAP, (BUDGET/n)/(w_i*m_i*u_i), VOL_CAP/sigma_i);
+    2. per-commodity NET EXPOSURE cap (train maxima only - stacking the same
+       contract across slots is hidden leverage);
+    3. ERC weights from the train covariance (correlation-aware sizing);
+    4. account solvency check on the TRAIN margin peak (PIT).
 
-    where margin_frac_i (in-market margin per notional) and util_i (fraction
-    of days in the market) are estimated on the TRAIN window only (point-in-
-    time sizing). Returns are linear in lots -> one unlevered pass + scaling
-    is exact. A realized account-margin check rescales globally if peaks
-    would exceed ~100% (solvency).
+    Returns are linear in lots -> one unlevered pass + scaling is exact.
     """
     unlevered, positions, infos = [], [], []
     n_trades_train = 0
@@ -97,11 +101,31 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
         sig = float(unlevered[len(levs)].iloc[:train_end].std(ddof=1) * np.sqrt(252))
         lev_vol = VOL_CAP / sig if sig > 0 else LEV_CAP
         levs.append(min(lev_budget, lev_vol))
-    slot_rets = [ret * lev for ret, lev in zip(unlevered, levs)]
+
+    # per-commodity net exposure cap (train maxima only, PIT)
+    scales, net_rep = enforce_net_cap(u, slots, positions, levs,
+                                      NET_CAP_FRAC, train_end)
+    keep = [i for i, sc in enumerate(scales) if sc > 0]
+    slots_k = [slots[i] for i in keep]
+    positions_k = [positions[i] for i in keep]
+    infos_k = [infos[i] for i in keep]
+    levs = [levs[i] * scales[i] for i in keep]
+    slot_rets = [unlevered[i] * levs[j] for j, i in enumerate(keep)]
+
+    # ERC weights from the TRAIN covariance (correlation-aware sizing)
+    weights = np.full(len(slot_rets), 1.0 / len(slot_rets)) if slot_rets else np.array([])
+    if slot_rets:
+        R = pd.concat(slot_rets, axis=1)
+        w_erc = erc_weights(R.iloc[:train_end])
+        if len(w_erc) == len(slot_rets) and np.all(np.isfinite(w_erc)):
+            weights = w_erc
+        port = pd.Series((R * weights).sum(axis=1), index=R.index)
+    else:
+        port = pd.Series(0.0, index=pd.RangeIndex(u.cfg.n_days))
 
     # realized account margin (per unit capital) and solvency check
     acct = np.zeros(u.cfg.n_days)
-    for lev, info, wi in zip(levs, infos, w):
+    for lev, info, wi in zip(levs, infos_k, weights):
         acct += lev * wi * np.asarray(info["margin_series"])
     scale = 1.0
     # PIT solvency check: the global rescale decision uses the TRAIN-window
@@ -113,9 +137,17 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
         slot_rets = [r * scale for r in slot_rets]
         levs = [lev * scale for lev in levs]
     acct_max = float(acct.max())
+    if scale != 1.0:
+        port = port * scale
+
+    # realized full-sample net exposure (diagnostic)
+    net_full = net_exposure(u, slots_k, positions_k)
+    total_cap = sum(s.cap for s in slots_k) or 1.0
+    net_full_frac = float(net_full.abs().max().max() / total_cap) if not net_full.empty else 0.0
 
     per_slot = []
-    for s, pos, ret, lev, info in zip(slots, positions, slot_rets, levs, infos):
+    for s, pos, ret, lev, info, wi in zip(slots_k, positions_k, slot_rets,
+                                          levs, infos_k, weights):
         ts_oos = perf_stats(ret.iloc[train_end:])
         ts_train = perf_stats(ret.iloc[:train_end])
         ts = dict(ts_oos)
@@ -124,15 +156,19 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
             "slot": s.label, "kind": s.kind, "true": s.is_true,
             "train_sharpe": ts_train["sharpe"],
             "leverage": lev, "utilization": float(np.asarray(info["held"])[:train_end].mean()),
+            "weight": float(wi),
         })
         per_slot.append((s, pos, ret, ts))
-    if slot_rets:
-        port = portfolio_return(slot_rets)
-    else:
+    if not slot_rets:
         port = pd.Series(0.0, index=pd.RangeIndex(u.cfg.n_days))
-    return port, per_slot, perf_stats(port.iloc[:train_end]), \
-        perf_stats(port.iloc[train_end:]), n_trades_train, \
-        {"acct_margin_mean": float(acct.mean() * scale), "acct_margin_max": float(acct_max * scale)}
+    m_tr = perf_stats(port.iloc[:train_end])
+    m_te = perf_stats(port.iloc[train_end:])
+    acct_info = {"acct_margin_mean": float(acct.mean() * scale),
+                 "acct_margin_max": float(acct_max * scale),
+                 "net_frac_train": net_rep["max_net_frac"],
+                 "net_frac_full": net_full_frac,
+                 "net_dropped": net_rep["dropped"]}
+    return port, per_slot, m_tr, m_te, n_trades_train, acct_info
 
 
 def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
@@ -155,7 +191,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
         print(f"候选池: {len(rows)} 个价差 (跨期 {sum(r['kind']=='cal' for r in rows)}"
               f" + 跨品种 {sum(r['kind']=='cross' for r in rows)}"
               f" + 三腿中性 {sum(r['kind']=='combo' for r in rows)}),"
-              f" 真回归 {sum(r['is_true'] for r in rows)} 个")
+              f" 真回归 {sum(r['is_true'] for r in rows)} 个; "
+              f"BH-FDR(q=0.10) 后显著 {benjamini_hochberg([r['p'] for r in rows])} 个")
 
         spec_df = pd.DataFrame([{
             "品种": s.code, "乘数": s.multiplier, "跳价": s.tick,
@@ -186,13 +223,14 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
     strategies = {"rolling": StratParams(mode="rolling"), "ou": StratParams(mode="ou"),
                   "auto": StratParams(mode="auto")}
     tune_rows = []
-    best_sharpe, best_params = -np.inf, None
+    best_sharpe, best_params, best_port_train = -np.inf, None, None
     for g in GRID:
         p = make_params(**g)
         _port, _ps, m_tr, _te, n_tr, _acct = eval_portfolio(u, slots, p, train_end)
         tune_rows.append({**g, "IS_sharpe": round(m_tr["sharpe"], 2), "trades": n_tr})
         if n_tr >= 15 and np.isfinite(m_tr["sharpe"]) and m_tr["sharpe"] > best_sharpe:
             best_sharpe, best_params = m_tr["sharpe"], p
+            best_port_train = _port.iloc[:train_end]
     strategies["ou_tuned"] = best_params or StratParams(mode="auto")
 
     results = {"universe": u, "slots": slots, "train_end": train_end,
@@ -220,10 +258,15 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True):
         print(f"选中参数: {mode_desc} entry={bp.z_entry} exit={bp.z_exit} "
               + (f"window={bp.window}" if bp.mode == "rolling" else f"refit=({bp.refit_every},{bp.refit_window})")
               + f" (train Sharpe {best_sharpe:.2f})")
+        dsr = deflated_sharpe(best_port_train, [t["IS_sharpe"] for t in tune_rows]) \
+            if best_port_train is not None else np.nan
+        results["dsr"] = dsr
         acct = results["strategies"]["ou_tuned"]["acct"]
         print(f"账户保证金: 平均 {acct['acct_margin_mean']:.0%} / 峰值 {acct['acct_margin_max']:.0%} "
-              f"(预算 {MARGIN_BUDGET:.0%})")
-        print(f"\n--- 策略对比(等分保证金预算 {MARGIN_BUDGET:.0%}×利用率调整, 换月强平, 含手续费与滑点)---")
+              f"(预算 {MARGIN_BUDGET:.0%}) | 组合净敞口: 训练期 {acct['net_frac_train']:.0%} / "
+              f"全样本 {acct['net_frac_full']:.0%} (限额 {NET_CAP_FRAC:.0%}, 因限额裁撤 {acct['net_dropped']} 槽)")
+        print(f"Deflated Sharpe (N={len(GRID)} 次试验折减): {dsr:.2f}")
+        print(f"\n--- 策略对比(等分保证金预算 {MARGIN_BUDGET:.0%}×利用率调整, ERC加权, 换月强平, 含手续费与滑点)---")
         print(pd.DataFrame(results["metrics"]).to_string(index=False))
     return results
 
@@ -382,11 +425,79 @@ def run_monte_carlo(args):
     pd.DataFrame(chosen).to_csv(os.path.join(args.outdir, "futures_mc_chosen_params.csv"), index=False)
 
 
+def run_hostile(args):
+    """Adversarial generator experiment: healthy spreads get dynamics the
+    strategy does NOT model (the screen can still find them) - does the
+    TRADING survive? This is the fix for generator-strategy circularity."""
+    modes = ["none", "regime", "garch", "seasonal", "jump"]
+    n_seeds = max(1, min(args.mc, 8)) if args.mc else 4
+    rows = []
+    for mode in modes:
+        for k in range(n_seeds):
+            cfg = FuturesConfig(seed=args.seed + 1000 * k, n_days=args.days,
+                                adversarial=mode)
+            res = run_pipeline(cfg, verbose=False)
+            m_te = res["strategies"]["ou_tuned"]["m_te"]
+            rows.append({"mode": mode, "seed": cfg.seed,
+                         "slots": len(res["slots"]),
+                         "true_slots": sum(s.is_true for s in res["slots"]),
+                         "OOS_sharpe": m_te["sharpe"],
+                         "OOS_ann%": 100 * m_te["ann_ret"],
+                         "OOS_dd%": 100 * m_te["max_dd"]})
+        print(f"[hostile] {mode} done", flush=True)
+    df = pd.DataFrame(rows)
+    summary = df.groupby("mode").agg(
+        Sharpe均值=("OOS_sharpe", "mean"), Sharpe最差=("OOS_sharpe", "min"),
+        全正=("OOS_sharpe", lambda s: bool((s > 0).all())),
+        年化均值=("OOS_ann%", "mean"), 年化最差=("OOS_ann%", "min"),
+        回撤均值=("OOS_dd%", "mean"),
+        发现槽位=("slots", "mean"), 真槽位=("true_slots", "mean"),
+    ).round(2)
+    print("\n--- 敌意生成器实验 (健康价差被换成策略未建模的动态; 调参策略 OOS) ---")
+    print(summary.to_string())
+    df.to_csv(os.path.join(args.outdir, "hostile_results.csv"), index=False)
+
+
+def run_sweep(args):
+    """One-at-a-time generator parameter sweep: how sensitive is the strategy
+    to the simulator's assumptions?"""
+    dims = [("frac_structural", [0.15, 0.30, 0.50]),
+            ("basis_sigma_scale", [0.7, 1.0, 1.5]),
+            ("break_fraction", [0.2, 0.4, 0.6])]
+    seeds_per = max(2, min(args.mc if args.mc else 3, 5))
+    rows = []
+    for dim, values in dims:
+        for v in values:
+            for k in range(seeds_per):
+                cfg = FuturesConfig(seed=args.seed + 1000 * k, n_days=args.days,
+                                    **{dim: v})
+                res = run_pipeline(cfg, verbose=False)
+                m_te = res["strategies"]["ou_tuned"]["m_te"]
+                rows.append({"setting": f"{dim}={v}", "seed": cfg.seed,
+                             "slots": len(res["slots"]),
+                             "true_slots": sum(s.is_true for s in res["slots"]),
+                             "OOS_sharpe": m_te["sharpe"],
+                             "OOS_ann%": 100 * m_te["ann_ret"]})
+        print(f"[sweep] {dim} done", flush=True)
+    df = pd.DataFrame(rows)
+    summary = df.groupby("setting").agg(
+        Sharpe均值=("OOS_sharpe", "mean"), 年化均值=("OOS_ann%", "mean"),
+        年化最差=("OOS_ann%", "min"), 槽位=("slots", "mean"),
+        真槽位=("true_slots", "mean")).round(2)
+    print("\n--- 生成器参数扫描 (单因素; 调参策略 OOS) ---")
+    print(summary.to_string())
+    df.to_csv(os.path.join(args.outdir, "sweep_results.csv"), index=False)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Futures mean-reversion arb on synthetic futures data")
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--days", type=int, default=1500)
     ap.add_argument("--mc", type=int, default=0)
+    ap.add_argument("--hostile", action="store_true",
+                    help="adversarial generator experiment (regime/garch/seasonal/jump)")
+    ap.add_argument("--sweep", action="store_true",
+                    help="one-at-a-time generator parameter sweep")
     ap.add_argument("--outdir", type=str, default="output")
     ap.add_argument("--no-plots", action="store_true")
     args = ap.parse_args()
@@ -394,6 +505,12 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
     if args.mc > 0:
         run_monte_carlo(args)
+        return
+    if args.hostile:
+        run_hostile(args)
+        return
+    if args.sweep:
+        run_sweep(args)
         return
 
     res = run_pipeline(FuturesConfig(seed=args.seed, n_days=args.days))

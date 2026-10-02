@@ -58,6 +58,8 @@ class FuturesConfig:
     vol_ar: float = 0.85           # AR(1) persistence of log-volume noise
     vol_noise_sd: float = 0.18
     roll_margin: float = 0.20      # challenger needs +20% volume to take dominance
+    adversarial: str = "none"      # none|regime|garch|seasonal|jump (healthy basis dynamics)
+    basis_sigma_scale: float = 1.0  # scales the healthy basis vol (sensitivity knob)
     vol_floor_liq: float = 3.0e4   # liquidity floor: avg daily lots of the thin leg
     frac_structural: float = 0.3
     n_planted_cross: int = 3
@@ -139,11 +141,64 @@ class SpreadSlot:
     adf_or_eg_p: float
     is_true: bool
     betas: tuple = ()          # hedge ratios on legs[1:]
+    alpha: float = 0.0         # intercept of the raw spread
     spread_adj: np.ndarray = None  # back-adjusted signal series (T,)
     block: np.ndarray = None   # force-flat decision days (rolls + warmup)
     ranks: tuple = ()
     oos_sharpe: float = np.nan
     cap: float = 1.0
+
+
+def _hostile_basis(rng, T: int, cfg: FuturesConfig, sigma_eq: float) -> np.ndarray:
+    """Healthy-commodity basis path under the configured adversarial dynamics.
+
+    Every mode stays (weakly) stationary so the SCREEN can still find the
+    spread - the experiment asks whether the TRADING survives dynamics the
+    strategy does not model. 'none' is the clean OU the strategy assumes.
+    """
+    mode = cfg.adversarial
+    kappa = np.log(2.0) / float(rng.uniform(*cfg.basis_hl_range))
+    sigma_eq *= cfg.basis_sigma_scale
+    if mode == "garch":
+        # OU with GARCH(1,1) innovation vol: vol-of-vol the z-score ignores
+        a = np.exp(-kappa)
+        omega = 0.05 * sigma_eq ** 2 * (1 - a * a)
+        eps = np.empty(T)
+        s2 = sigma_eq ** 2
+        z = rng.standard_normal(T)
+        for t in range(T):
+            eps[t] = np.sqrt(s2) * z[t]
+            s2 = omega + 0.05 * eps[t] ** 2 + 0.90 * s2
+        out = np.empty(T)
+        out[0] = rng.normal(0.0, sigma_eq)
+        for t in range(1, T):
+            out[t] = a * out[t - 1] + eps[t]
+        return out
+    if mode == "seasonal":
+        # OU around a moving seasonal mean: static-mu z-scores are biased
+        base = _simulate_ou_spread(rng, T, kappa, sigma_eq)
+        amp = rng.uniform(0.004, 0.009)
+        phi = rng.uniform(0.0, 2.0 * np.pi)
+        return base + amp * np.sin(2.0 * np.pi * np.arange(T) / 365.0 + phi)
+    if mode == "jump":
+        # occasional 2.5-sigma jumps: stop-outs and disarming get exercised
+        base = _simulate_ou_spread(rng, T, kappa, sigma_eq)
+        jumps = (rng.random(T) < 0.008) * rng.normal(0.0, 2.5 * sigma_eq, T)
+        return base + jumps
+    if mode == "regime":
+        # two-state Markov kappa (half-life 40d <-> 6d): the fixed
+        # 3x-half-life timeout and thresholds are misspecified
+        out = np.empty(T)
+        out[0] = rng.normal(0.0, sigma_eq)
+        kappas = [np.log(2.0) / 40.0, np.log(2.0) / 6.0]
+        state = 0
+        for t in range(1, T):
+            if rng.random() < 0.012:
+                state ^= 1
+            a_t = np.exp(-kappas[state])
+            out[t] = a_t * out[t - 1] + sigma_eq * np.sqrt(1 - a_t * a_t) * rng.standard_normal()
+        return out
+    return _simulate_ou_spread(rng, T, kappa, sigma_eq)
 
 
 def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
@@ -191,8 +246,8 @@ def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
     for c in range(n_com):
         for j in range(n_mat):
             if healthy[c]:
-                basis[c, j] = _simulate_ou_spread(rng, T, np.log(2.0) / float(rng.uniform(*cfg.basis_hl_range)),
-                                                  float(rng.uniform(*cfg.basis_sigma_range)))
+                basis[c, j] = _hostile_basis(rng, T, cfg,
+                                             float(rng.uniform(*cfg.basis_sigma_range)))
             else:
                 basis[c, j] = np.cumsum(rng.standard_normal(T) * float(rng.uniform(*cfg.struct_sigma_range)))
 
@@ -229,6 +284,49 @@ def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
     volume = np.where(listed, activity * profile * delivery * np.exp(noise), 0.0)
 
     # --- algorithmic dominant contract (hysteresis) + next-expiry ranks ---
+    rank_idx, roll_days = _compute_dominance(volume, listed, tau, cfg)
+
+    specs = [CommoditySpec(code=code, sector=sec, multiplier=mult, tick=tick,
+                           fee_per_lot=fp, fee_rate=fr, margin_rate=mr,
+                           expiry_step=st, activity=act,
+                           healthy_term=bool(healthy[c]), start_price=float(start_p[c]))
+             for c, (code, sec, mult, tick, fp, fr, mr, st, act) in enumerate(_SPEC_TABLE)]
+    return FuturesUniverse(cfg=cfg, specs=specs, tau=tau, logF=logF, volume=volume,
+                           rank_idx=rank_idx, roll_days=roll_days,
+                           planted_cross=planted_cross, healthy=healthy)
+
+
+# --------------------------------------------------------------------------
+# candidates: spreads between volume-ranked contracts + cross-commodity
+# --------------------------------------------------------------------------
+
+_CAL_RANK_PAIRS = [(1, 2), (1, 3)]
+_RANK_SLIP_TICKS = {1: 1.0, 2: 2.0, 3: 3.0}   # thin legs cost more slippage
+
+
+def _leg(u: FuturesUniverse, c: int, rank: int):
+    idx = u.rank_idx[rank - 1, :, c]
+    px = np.where(idx >= 0, u.logF[c, np.clip(idx, 0, None), np.arange(u.cfg.n_days)], np.nan)
+    return idx, px
+
+
+def _leg_avg_vol(u: FuturesUniverse, c: int, idx: np.ndarray, train_end: int) -> float:
+    """Train-window mean daily volume of the rank-`idx` contract series."""
+    tt = np.arange(train_end)
+    valid = idx[:train_end] >= 0
+    if not valid.any():
+        return float("nan")
+    vols = u.volume[c, np.clip(idx[:train_end], 0, None)[valid], tt[valid]]
+    return float(np.nanmean(vols))
+
+
+def _compute_dominance(volume: np.ndarray, listed: np.ndarray, tau: np.ndarray,
+                       cfg: FuturesConfig):
+    """Volume-driven dominant contract with hysteresis + next-expiry ranks.
+
+    Kept as a standalone function so tests can rebuild ranks after perturbing
+    volumes (PIT verification)."""
+    n_com, n_mat, T = volume.shape
     eligible = listed & (tau > cfg.delivery_buffer)
     logVs = np.where(eligible, np.log(np.maximum(volume, 1.0)), np.nan)
     # 5-day smoothing to avoid day-to-day flip-flops
@@ -279,46 +377,30 @@ def simulate_futures(cfg: FuturesConfig) -> FuturesUniverse:
     for c in range(n_com):
         d = rank_idx[0, :, c]
         roll_days[c][1:] = (d[1:] != d[:-1]) & (d[1:] != -1) & (d[:-1] != -1)
-
-    specs = [CommoditySpec(code=code, sector=sec, multiplier=mult, tick=tick,
-                           fee_per_lot=fp, fee_rate=fr, margin_rate=mr,
-                           expiry_step=st, activity=act,
-                           healthy_term=bool(healthy[c]), start_price=float(start_p[c]))
-             for c, (code, sec, mult, tick, fp, fr, mr, st, act) in enumerate(_SPEC_TABLE)]
-    return FuturesUniverse(cfg=cfg, specs=specs, tau=tau, logF=logF, volume=volume,
-                           rank_idx=rank_idx, roll_days=roll_days,
-                           planted_cross=planted_cross, healthy=healthy)
+    return rank_idx, roll_days
 
 
-# --------------------------------------------------------------------------
-# candidates: spreads between volume-ranked contracts + cross-commodity
-# --------------------------------------------------------------------------
+def _causal_block(u: FuturesUniverse, leg_specs, leg_idx) -> np.ndarray:
+    """Force-flat days knowable AT day t (no lookahead):
 
-_CAL_RANK_PAIRS = [(1, 2), (1, 3)]
-_RANK_SLIP_TICKS = {1: 1.0, 2: 2.0, 3: 3.0}   # thin legs cost more slippage
+    - a leg's current contract is within `delivery_buffer` of expiry -> the
+      volume algorithm must roll it imminently (tau is known today);
+    - the day of (and one day after) a realized switch -> brief re-arm warmup.
 
-
-def _leg(u: FuturesUniverse, c: int, rank: int):
-    idx = u.rank_idx[rank - 1, :, c]
-    px = np.where(idx >= 0, u.logF[c, np.clip(idx, 0, None), np.arange(u.cfg.n_days)], np.nan)
-    return idx, px
-
-
-def _leg_avg_vol(u: FuturesUniverse, c: int, idx: np.ndarray, train_end: int) -> float:
-    """Train-window mean daily volume of the rank-`idx` contract series."""
-    tt = np.arange(train_end)
-    valid = idx[:train_end] >= 0
-    if not valid.any():
-        return float("nan")
-    vols = u.volume[c, np.clip(idx[:train_end], 0, None)[valid], tt[valid]]
-    return float(np.nanmean(vols))
-
-
-def _roll_block(roll_mask: np.ndarray, warmup: int = 2) -> np.ndarray:
-    T = len(roll_mask)
+    Holding through a roll is now legitimate: on the switch day the traded
+    PnL is the OLD contract's price change (see backtest_slot), so no splice
+    jump ever enters the account.
+    """
+    T = leg_idx[0].shape[0]
+    tt = np.arange(T)
     block = np.zeros(T, dtype=bool)
-    for r in np.where(roll_mask)[0]:
-        block[max(0, r - 1): r + warmup + 1] = True
+    for (c, _rank), idx in zip(leg_specs, leg_idx):
+        switched = np.zeros(T, dtype=bool)
+        switched[1:] = (idx[1:] != idx[:-1]) & (idx[1:] >= 0) & (idx[:-1] >= 0)
+        for t in np.where(switched)[0]:
+            block[t: t + 2] = True
+        tau_leg = u.tau[c, np.clip(idx, 0, None), tt]
+        block |= (idx >= 0) & (tau_leg <= u.cfg.delivery_buffer)
     return block
 
 
@@ -556,8 +638,10 @@ def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
                       roll_count=int(r["roll"].sum()),
                       half_life=r["hl"], sigma_eq=r["sigma_eq"],
                       adf_or_eg_p=r["p"], is_true=r["is_true"],
-                      betas=r["betas"], spread_adj=r["adj_full"],
-                      block=_roll_block(r["roll"]), ranks=r.get("ranks", ()),
+                      betas=r["betas"], alpha=float(r["alpha"]),
+                      spread_adj=r["adj_full"],
+                      block=_causal_block(u, r["leg_specs"], r["leg_idx"]),
+                      ranks=r.get("ranks", ()),
                       cap=cap)
 
 
@@ -565,13 +649,9 @@ def _to_slot(u: FuturesUniverse, r: dict) -> SpreadSlot:
 # lot-based backtest with rank-aware slippage / fees / rollover
 # --------------------------------------------------------------------------
 
-def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
-                  cost_mult: float = 1.0, margin_target: float | None = None,
-                  lev_cap: float = 4.0):
-    """OU/rolling signals + N-leg lot accounting for one spread slot. Signals
-    run on the back-adjusted spread; PnL on the raw legs (CNY price diffs).
-    Slippage per leg scales with its volume rank."""
-    T = u.cfg.n_days
+def slot_positions(u: FuturesUniverse, slot: SpreadSlot, params: StratParams):
+    """z & target positions for one slot (factored out so PIT tests can call
+    it against a perturbed universe)."""
     eff_mode = params.mode
     if params.mode == "auto":
         eff_mode = "rolling" if slot.kind in ("cross", "combo") else "ou"
@@ -580,19 +660,43 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
     else:
         z = ou_z_point_in_time(slot.spread_adj, params)
     max_hold = int(np.ceil(params.hold_mult * slot.half_life))
-    pos = position_from_z(z, params, max_hold, block=slot.block)
+    return z, position_from_z(z, params, max_hold, block=slot.block)
+
+
+def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
+                  cost_mult: float = 1.0, margin_target: float | None = None,
+                  lev_cap: float = 4.0):
+    """OU/rolling signals + N-leg lot accounting for one spread slot. Signals
+    run on the back-adjusted spread; PnL on raw legs (CNY price diffs), where
+    a rollover day earns the OLD contract's price change (you roll at that
+    day's close), so splice jumps never enter the account. Slippage per leg
+    scales with its volume rank."""
+    T = u.cfg.n_days
+    z, pos = slot_positions(u, slot, params)
 
     tt = np.arange(T)
-    ds, pxs = [], []
+    ds, pxs, switched = [], [], []
     for leg in slot.legs:
         px = np.where(leg.idx >= 0, u.logF[leg.com, np.clip(leg.idx, 0, None), tt], np.nan)
         lvl = np.exp(px)
         d = np.zeros(T)
         d[1:] = lvl[1:] - lvl[:-1]           # CNY price change per point (NOT dlog)
+        sw = np.zeros(T, dtype=bool)
+        sw[1:] = (leg.idx[1:] != leg.idx[:-1]) & (leg.idx[1:] >= 0) & (leg.idx[:-1] >= 0)
+        for t in np.where(sw)[0]:            # rollover: old contract's change
+            j_prev = leg.idx[t - 1]
+            if j_prev >= 0:
+                old_lvl = np.exp(u.logF[leg.com, j_prev, t])
+                if np.isfinite(old_lvl) and np.isfinite(lvl[t - 1]):
+                    d[t] = old_lvl - lvl[t - 1]
         d = np.where(np.isfinite(d), d, 0.0)
-        d[slot.block] = 0.0
         ds.append(d)
         pxs.append(lvl)
+        switched.append(sw)
+
+    roll_cost = np.zeros(T)
+    for i, leg in enumerate(slot.legs):
+        roll_cost += switched[i] * leg.lots * (leg.fee + leg.slip)
 
     pnl = np.zeros(T)
     margin_series = np.zeros(T)
@@ -604,6 +708,8 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
                          for i, leg in enumerate(slot.legs))
         if churn > 0:
             pnl[t] -= churn * sum(leg.lots * (leg.fee + leg.slip) for leg in slot.legs)
+        if p != 0:
+            pnl[t] -= cost_mult * roll_cost[t]   # fees paid to roll the book
         prev = p
         if p != 0 and all(np.isfinite(px[t]) for px in pxs):
             margin_series[t] = sum(leg.lots * leg.mult * pxs[i][t] * u.specs[leg.com].margin_rate
