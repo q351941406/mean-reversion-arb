@@ -68,11 +68,13 @@ class FuturesConfig:
     adversarial: str = "none"      # none|regime|garch|seasonal|jump (healthy basis dynamics)
     basis_sigma_scale: float = 1.0  # scales the healthy basis vol (sensitivity knob)
     basis_hl_scale: float = 1.0     # scales the healthy basis half-life (sensitivity knob)
-    basis_mu_drift: float = 0.0     # daily RW step of the spread mean (log units).
+    basis_mu_drift: float = 0.0     # daily vol of the spread-mean drift (log units).
                                     # Calibrated to the real-market measurement:
                                     # I-calendar OOS mean drifted +2.8 sigma_eq
                                     # over ~340d -> sigma_m = 2.8*sigma_eq/sqrt(340)
                                     # ~= 4.8e-4. 0 = v2 behavior (constant mu).
+    basis_mu_drift_hl: float = 0.0  # half-life (days) of the drift as an OU process
+                                    # (autocorrelation calibration; 0 = random walk)
     vol_floor_liq: float = 3.0e4   # liquidity floor: avg daily lots of the thin leg
     frac_structural: float = 0.3
     n_planted_cross: int = 3
@@ -288,9 +290,22 @@ def _simulate_panel(cfg: FuturesConfig):
                 b = _hostile_basis(rng, T, cfg,
                                    float(rng.uniform(*cfg.basis_sigma_range)))
                 if cfg.basis_mu_drift > 0:
-                    # v3: slowly drifting spread mean (matches the measured
-                    # real-market mu drift that made rolling-z beat OU)
-                    b = b + np.cumsum(rng.standard_normal(T) * cfg.basis_mu_drift)
+                    # v3: drifting spread mean (matches the measured real-market
+                    # mu drift that made rolling-z beat OU). Drift is RW by
+                    # default, or an OU with basis_mu_drift_hl half-life
+                    # (autocorrelation calibration - see docs/10 §2).
+                    drift = np.cumsum(rng.standard_normal(T) * cfg.basis_mu_drift)
+                    if cfg.basis_mu_drift_hl > 0:
+                        kd = np.log(2.0) / cfg.basis_mu_drift_hl
+                        ad = np.exp(-kd)
+                        d_ou = np.empty(T)
+                        d_ou[0] = drift[0]
+                        for t in range(1, T):
+                            d_ou[t] = (ad * d_ou[t - 1]
+                                       + cfg.basis_mu_drift * np.sqrt(1 - ad * ad)
+                                       * rng.standard_normal())
+                        drift = d_ou
+                    b = b + drift
                 basis[c, j] = b
             else:
                 basis[c, j] = np.cumsum(rng.standard_normal(T) * float(rng.uniform(*cfg.struct_sigma_range)))

@@ -194,7 +194,15 @@ class FuyaoProvider(DataProvider):
         keep = pd.DataFrame(keep)
         days = np.array(prices.index.values)
         pos = np.searchsorted(days, keep["expiry_date"].values)
-        keep["expiry_day"] = np.where(pos < len(days), pos, len(days))
+        # contracts expiring beyond the panel: searchsorted clamps them to
+        # len(days), which collapses their tau to ~1 day and excludes them
+        # from dominance at the tail -> extrapolate trading days instead
+        last_day = np.datetime64(days[-1])
+        exp64 = keep["expiry_date"].values.astype("datetime64[D]")
+        beyond = exp64 > last_day
+        extra = np.busday_count(last_day, exp64)
+        pos = np.where(beyond, (len(days) - 1) + np.maximum(extra, 1), pos)
+        keep["expiry_day"] = pos
         keep = keep[["code", "contract_id", "expiry_day", "expiry_date"]]
 
         ds = FuturesDataset(prices=prices, volume=volume, contracts=keep,
