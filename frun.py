@@ -650,7 +650,8 @@ def main():
     ap.add_argument("--provider", choices=["synthetic", "csv", "parquet", "mock", "akshare", "fuyao"],
                     default="synthetic", help="data source adapter (parquet recommended)")
     ap.add_argument("--fuyao-varieties", type=str, default="",
-                    help="comma-separated variety codes for --provider fuyao (default: 12 majors)")
+                    help="comma-separated variety codes for --provider fuyao "
+                         "(default: 22 liquid varieties)")
     ap.add_argument("--fuyao-start", type=str, default="2023-04-01",
                     help="sample start date for --provider fuyao")
     ap.add_argument("--refresh", action="store_true",

@@ -68,6 +68,11 @@ class FuturesConfig:
     adversarial: str = "none"      # none|regime|garch|seasonal|jump (healthy basis dynamics)
     basis_sigma_scale: float = 1.0  # scales the healthy basis vol (sensitivity knob)
     basis_hl_scale: float = 1.0     # scales the healthy basis half-life (sensitivity knob)
+    basis_mu_drift: float = 0.0     # daily RW step of the spread mean (log units).
+                                    # Calibrated to the real-market measurement:
+                                    # I-calendar OOS mean drifted +2.8 sigma_eq
+                                    # over ~340d -> sigma_m = 2.8*sigma_eq/sqrt(340)
+                                    # ~= 4.8e-4. 0 = v2 behavior (constant mu).
     vol_floor_liq: float = 3.0e4   # liquidity floor: avg daily lots of the thin leg
     frac_structural: float = 0.3
     n_planted_cross: int = 3
@@ -280,8 +285,13 @@ def _simulate_panel(cfg: FuturesConfig):
     for c in range(n_com):
         for j in range(n_mat):
             if healthy[c]:
-                basis[c, j] = _hostile_basis(rng, T, cfg,
-                                             float(rng.uniform(*cfg.basis_sigma_range)))
+                b = _hostile_basis(rng, T, cfg,
+                                   float(rng.uniform(*cfg.basis_sigma_range)))
+                if cfg.basis_mu_drift > 0:
+                    # v3: slowly drifting spread mean (matches the measured
+                    # real-market mu drift that made rolling-z beat OU)
+                    b = b + np.cumsum(rng.standard_normal(T) * cfg.basis_mu_drift)
+                basis[c, j] = b
             else:
                 basis[c, j] = np.cumsum(rng.standard_normal(T) * float(rng.uniform(*cfg.struct_sigma_range)))
 

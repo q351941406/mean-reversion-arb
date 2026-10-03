@@ -1,0 +1,12 @@
+window A (2023-26 全切分): 2 个跨期槽: ['I 主力~次到期', 'HC 主力~隔月']
+  rolling20(基准)    OOS sharpe=  1.26 ann=  6.54% dd= -3.65%
+  r40 x.25         OOS sharpe= -0.23 ann= -1.51% dd= -8.09%
+  r60 x.50         OOS sharpe= -0.26 ann= -1.53% dd= -8.25%
+window B (2023-26 walk-forward 4折):
+  rolling20(基准)    folds=[-0.98, 2.04, 0.48, 1.67] mean=  0.81
+  r40 x.25         folds=[1.25, 1.27, -0.46, -1.17] mean=  0.22
+  r60 x.50         folds=[-0.32, 0.76, -0.65, -0.7] mean= -0.23
+window C (2020-23 holdout, 787d):
+  rolling20(基准)    folds=[2.93, 0.99, -0.54, 0.45] mean=  0.96 ann=  5.62%
+  r40 x.25         folds=[2.15, 1.02, -1.9, -0.9] mean=  0.09 ann=  1.85%
+  r60 x.50         folds=[2.49, -0.55, 1.05, -0.64] mean=  0.59 ann=  2.72%

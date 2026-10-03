@@ -28,7 +28,8 @@ import pandas as pd
 from .data import DataProvider, FuturesDataset, write_dataset_parquet
 
 BASE = "https://fuyao.aicubes.cn"
-DEFAULT_VARIETIES = ["RB", "HC", "I", "CU", "AL", "ZN", "Y", "P", "OI", "L", "PP", "V"]
+DEFAULT_VARIETIES = ["RB", "HC", "I", "CU", "AL", "ZN", "Y", "P", "OI", "L", "PP", "V",
+                     "AG", "AU", "SN", "NI", "PB", "TA", "MA", "FG", "SC", "RU"]
 _TICKER_RE = re.compile(r"^[A-Za-z]+\d{3,4}$")   # excludes 连续/主连/价差 codes
 
 
