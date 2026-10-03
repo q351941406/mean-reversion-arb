@@ -78,7 +78,8 @@ def make_params(**kw) -> StratParams:
 
 def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: int,
                    cost_mult: float = 1.0, vol_cap: float = None,
-                   margin_budget: float = None, lev_cap: float = None):
+                   margin_budget: float = None, lev_cap: float = None,
+                   lots: list = None, equity: float = None):
     """Backtest all slots unlevered, then the portfolio layer:
 
     1. margin-budget x utilization leverage + per-slot vol cap (train est.):
@@ -124,21 +125,36 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
     # per-commodity net exposure cap (train maxima only, PIT)
     scales, net_rep = enforce_net_cap(u, slots, positions, levs,
                                       margin_budget, train_end)
-    keep = [i for i, sc in enumerate(scales) if sc > 0]
+    account_mode = lots is not None and equity
+    if account_mode:
+        keep = [i for i, n in enumerate(lots) if n > 0]
+    else:
+        keep = [i for i, sc in enumerate(scales) if sc > 0]
     slots_k = [slots[i] for i in keep]
     positions_k = [positions[i] for i in keep]
     infos_k = [infos[i] for i in keep]
-    levs = [levs[i] * scales[i] for i in keep]
-    slot_rets = [unlevered[i] * levs[j] for j, i in enumerate(keep)]
+    if account_mode:
+        # integer lots per leg: scale = lots (CNY PnL scales linearly);
+        # account return = sum(n_i * pnl_1lot_i) / equity
+        levs = [float(lots[i]) for i in keep]
+        slot_rets = [unlevered[i] * levs[j] * slots_k[j].cap / equity
+                     for j, i in enumerate(keep)]
+    else:
+        levs = [levs[i] * scales[i] for i in keep]
+        slot_rets = [unlevered[i] * levs[j] for j, i in enumerate(keep)]
 
-    # ERC weights from the TRAIN covariance (correlation-aware sizing)
+    # weights: ERC from train covariance in sandbox mode; in account mode the
+    # integer-lot sizing already allocates CNY, so the account PnL is the SUM
+    # of the slots' CNY streams divided by equity (equal capital usage).
     weights = np.full(len(slot_rets), 1.0 / len(slot_rets)) if slot_rets else np.array([])
-    if slot_rets:
+    if slot_rets and not account_mode:
         R = pd.concat(slot_rets, axis=1)
         w_erc = erc_weights(R.iloc[:train_end])
         if len(w_erc) == len(slot_rets) and np.all(np.isfinite(w_erc)):
             weights = w_erc
         port = pd.Series((R * weights).sum(axis=1), index=R.index)
+    elif slot_rets:
+        port = pd.concat(slot_rets, axis=1).sum(axis=1)
     else:
         port = pd.Series(0.0, index=pd.RangeIndex(u.cfg.n_days))
 
@@ -202,7 +218,8 @@ def true_count(slots) -> int:
 def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
                  book: str = "all", vol_cap: float = None,
                  margin_budget: float = None, max_notional: float = None,
-                 lev_cap: float = None):
+                 lev_cap: float = None, equity: float = None,
+                 broker_markup_pp: float = 2.0, spread_discount: float = 0.0):
     provider = provider or SyntheticProvider(cfg)
     ds = provider.load_dataset()
     if getattr(provider, "name", "synthetic") != "synthetic":
@@ -227,6 +244,9 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     u = build_universe(ds, cfg)
     cfg = u.cfg                            # n_days aligned to the actual panel
     train_end = int(u.n_days * cfg.train_fraction)
+    vol_cap = VOL_CAP if vol_cap is None else vol_cap
+    margin_budget = MARGIN_BUDGET if margin_budget is None else margin_budget
+    lev_cap = LEV_CAP if lev_cap is None else lev_cap
     slots, rows = screen_candidates(u, train_end)
     if book == "calendar":
         slots = [s for s in slots if s.kind == "cal"]
@@ -235,6 +255,11 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
         slots = [s for s in slots
                  if max(lg.lots * lg.mult * (s.cap / max(1, len(s.legs)))
                         for lg in s.legs) <= max_notional]
+    lots_list = None
+    if equity:
+        from mrarb.futures import slot_positions as _sp  # noqa
+        lots_list, lots_rep = size_integer_lots(u, slots, equity, margin_budget,
+                                                broker_markup_pp, spread_discount)
 
     if verbose:
         n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
@@ -295,7 +320,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
         _port, _ps, m_tr, _te, n_tr, _acct = eval_portfolio(u, slots, p, train_end,
                                                               vol_cap=vol_cap,
                                                               margin_budget=margin_budget,
-                                                              lev_cap=lev_cap)
+                                                              lev_cap=lev_cap,
+                                                              lots=lots_list, equity=equity)
         tune_rows.append({**g, "IS_sharpe": round(m_tr["sharpe"], 2), "trades": n_tr})
         if n_tr >= 15 and np.isfinite(m_tr["sharpe"]) and m_tr["sharpe"] > best_sharpe:
             best_sharpe, best_params = m_tr["sharpe"], p
@@ -307,7 +333,8 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     for name in ("rolling", "ou", "ou_opt", "auto", "ou_tuned"):
         port, per_slot, m_tr, m_te, _n, acct = eval_portfolio(u, slots, strategies[name], train_end,
                                                                  vol_cap=vol_cap, margin_budget=margin_budget,
-                                                                 lev_cap=lev_cap)
+                                                                 lev_cap=lev_cap,
+                                                                 lots=lots_list, equity=equity)
         results["strategies"][name] = {"params": strategies[name], "port": port,
                                        "per_slot": per_slot, "m_tr": m_tr, "m_te": m_te,
                                        "acct": acct}
@@ -563,6 +590,40 @@ def run_sweep(args):
     df.to_csv(os.path.join(args.outdir, "sweep_results.csv"), index=False)
 
 
+def size_integer_lots(u, slots, equity: float, margin_budget: float,
+                      broker_markup_pp: float, discount: float):
+    """Account-level INTEGER-lot sizing with FIXED exchange margin rates.
+
+    国内期货的杠杆不是旋钮: 保证金率由交易所+期货公司固定(fuyao 已取),
+    交易者只控制手数(整数), 受账户权益硬约束。按筛选排名贪心分配保证金
+    预算; 买不起 1 手的槽位直接弃(小账户的真实摩擦)。
+    Returns (lots list, report)."""
+    remaining = equity * margin_budget
+    tt = np.arange(u.n_days)
+    lots, used, dropped, skipped = [], 0.0, 0, 0
+    for s in slots:   # slots arrive in screen-rank order (greedy by rank)
+        mp = 0.0
+        for lg in s.legs:
+            px = np.exp(np.where(lg.idx >= 0,
+                                 u.logF[lg.com, np.clip(lg.idx, 0, None), tt], np.nan))
+            p_bar = float(np.nanmean(px[:max(1, int(u.n_days * 0.6))]))                 if np.isfinite(px[:max(1, int(u.n_days * 0.6))]).any() else float("nan")
+            rate = u.specs[lg.com].margin_rate + broker_markup_pp / 100.0
+            if np.isfinite(p_bar):
+                mp += rate * lg.mult * p_bar
+        if s.kind == "cal" and discount > 0:
+            mp *= (1.0 - discount)
+        n = int(remaining // mp) if (np.isfinite(mp) and mp > 0) else 0
+        if n < 1:
+            lots.append(0)
+            skipped += 1
+            continue
+        lots.append(n)
+        remaining -= n * mp
+        used += n * mp
+    return lots, {"margin_used_cny": round(used), "dropped_unaffordable": skipped,
+                  "equity": equity}
+
+
 def make_provider(args):
     cfg = FuturesConfig(seed=args.seed, n_days=args.days,
                         spread_margin_discount=args.spread_margin_discount)
@@ -683,6 +744,11 @@ def main():
     ap.add_argument("--spread-margin-discount", type=float, default=0.0,
                     help="exchange margin benefit for calendar spreads (0.5 = half); "
                          "VERIFY current exchange schedule")
+    ap.add_argument("--equity", type=float, default=0,
+                    help="account equity CNY; >0 switches to account-level "
+                         "INTEGER-lot sizing (fixed exchange margin + broker markup)")
+    ap.add_argument("--broker-markup-pp", type=float, default=2.0,
+                    help="broker margin markup in percentage points added to the exchange rate")
     ap.add_argument("--book", choices=["all", "calendar"], default="all",
                     help="calendar = small-account book: 1:1-hedged calendar "
                          "spreads only, no liquidity gate, fast hl range")
@@ -733,7 +799,9 @@ def main():
     cfg = FuturesConfig(seed=args.seed, n_days=args.days)
     res = run_pipeline(cfg, provider=make_provider(args), book=args.book,
                        vol_cap=args.vol_cap, margin_budget=args.margin_budget,
-                       max_notional=args.max_notional, lev_cap=args.lev_cap)
+                       max_notional=args.max_notional, lev_cap=args.lev_cap,
+                       equity=args.equity, broker_markup_pp=args.broker_markup_pp,
+                       spread_discount=args.spread_margin_discount)
     report_slots(res)
     if not args.no_plots:
         plot_term_structure(res, args.outdir)
