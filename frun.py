@@ -603,33 +603,59 @@ def size_integer_lots(u, slots, equity: float, margin_budget: float,
     Returns (lots list, report)."""
     params = params or StratParams(mode="rolling", window=20, z_entry=1.25, z_exit=0.5)
     vol_budget_cny = vol_cap * equity            # per-slot ann vol budget (CNY)
-    remaining = equity * margin_budget
+    margin_total = equity * margin_budget
+    share = margin_total / max(len(slots), 1)
     tt = np.arange(u.n_days)
-    lots, used, dropped, skipped = [], 0.0, 0, 0
-    for s in slots:   # slots arrive in screen-rank order (greedy by rank)
+    lots, used, skipped = [], 0, 0
+
+    # pass 0: per-slot vol target and margin-per-lot (1-lot ann vol from an
+    # unlevered backtest pass)
+    n_vol_l, mp_l = [], []
+    for s in slots:
+        ret1, _p1, _i1 = backtest_slot(u, s, params, margin_target=None)
+        sig1 = float(ret1.iloc[:max(2, int(u.n_days * 0.6))].std(ddof=1)
+                     * np.sqrt(252) * s.cap)          # CNY ann vol per 1 lot
+        n_vol_l.append(int(vol_budget_cny / sig1) if sig1 > 0 else 0)
         mp = 0.0
         for lg in s.legs:
             px = np.exp(np.where(lg.idx >= 0,
                                  u.logF[lg.com, np.clip(lg.idx, 0, None), tt], np.nan))
-            p_bar = float(np.nanmean(px[:max(1, int(u.n_days * 0.6))]))                 if np.isfinite(px[:max(1, int(u.n_days * 0.6))]).any() else float("nan")
+            p_bar = float(np.nanmean(px[:max(1, int(u.n_days * 0.6))])) \
+                if np.isfinite(px[:max(1, int(u.n_days * 0.6))]).any() else float("nan")
             rate = u.specs[lg.com].margin_rate + broker_markup_pp / 100.0
             if np.isfinite(p_bar):
                 mp += rate * lg.mult * p_bar
         if s.kind == "cal" and discount > 0:
             mp *= (1.0 - discount)
-        # vol-target lots: slot 1-lot ann vol (CNY) from an unlevered pass
-        ret1, _p1, _i1 = backtest_slot(u, s, params, margin_target=None)
-        sig1 = float(ret1.iloc[:max(2, int(u.n_days * 0.6))].std(ddof=1)
-                     * np.sqrt(252) * s.cap)          # CNY ann vol per 1 lot
-        n_vol = int(vol_budget_cny / sig1) if sig1 > 0 else 0
-        n_margin = int(remaining // mp) if (np.isfinite(mp) and mp > 0) else 0
-        n = max(0, min(n_vol, n_margin))
+        mp_l.append(mp)
+
+    # pass 1: equal margin share per slot (integer, vol-capped)
+    n_lots = []
+    remaining = margin_total
+    for n_vol, mp in zip(n_vol_l, mp_l):
+        n = min(n_vol, int(share // mp)) if (np.isfinite(mp) and mp > 0) else 0
+        n_lots.append(n)
+        remaining -= n * mp
+    # pass 2: redistribute the unused budget in screen-rank order to slots
+    # whose vol target wants more
+    for i in np.argsort([-n for n in n_vol_l]):
+        if remaining <= 0:
+            break
+        mp = mp_l[i]
+        want = n_vol_l[i] - n_lots[i]
+        if want <= 0 or not (np.isfinite(mp) and mp > 0):
+            continue
+        extra = min(want, int(remaining // mp))
+        if extra > 0:
+            n_lots[i] += extra
+            remaining -= extra * mp
+
+    for n, mp in zip(n_lots, mp_l):
         if n < 1:
             lots.append(0)
             skipped += 1
             continue
         lots.append(n)
-        remaining -= n * mp
         used += n * mp
     return lots, {"margin_used_cny": round(used), "dropped_unaffordable": skipped,
                   "equity": equity}

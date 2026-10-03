@@ -17,6 +17,7 @@ Notes:
   pipeline already treats it as unknown.
 """
 
+import json
 import os
 import re
 import time
@@ -39,9 +40,11 @@ class FuyaoProvider(DataProvider):
     def __init__(self, cache_dir: str | Path = "data/fuyao",
                  varieties: list[str] | None = None,
                  start: str = "2023-04-01", end: str | None = None,
-                 sleep_s: float = 0.15, refresh: bool = False):
+                 sleep_s: float = 0.1, refresh: bool = False):
         self.cache_dir = Path(cache_dir)
-        self.varieties = list(varieties or DEFAULT_VARIETIES)
+        # None = the WHOLE commodity market (every fuyao variety except
+        # CFFEX financial futures) - the user's actual research scope.
+        self.varieties = list(varieties) if varieties else None
         self.start = start
         self.end = end
         self.sleep_s = sleep_s
@@ -66,17 +69,23 @@ class FuyaoProvider(DataProvider):
                      for v in self._get_json("/api/futures/varieties/list")["item"]}
         plates = {p["variety_code"]: p["plate_name"]
                   for p in self._get_json("/api/futures/variety-plates/list")["item"]}
+        wanted = self.varieties or [c for c, v in varieties.items()
+                                    if v["exchange_code"] != "CFFEX"]
         rows = []
-        for code in self.varieties:
-            v = varieties[code]
+        for code in wanted:
+            v = varieties.get(code)
+            if v is None or v.get("contract_multiplier") is None \
+                    or v.get("tick_size") is None:
+                continue                       # incomplete spec: skip variety
             fee, fee_rate = v.get("transaction_fee"), v.get("transaction_fee_rate")
+            margin = v.get("margin_rate")
             rows.append({
                 "code": code,
                 "multiplier": float(v["contract_multiplier"]),
                 "tick": float(v["tick_size"]),
                 "fee_per_lot": None if fee is None else float(fee),
                 "fee_rate": None if fee_rate is None else float(fee_rate) * 1e-4,
-                "margin_rate": float(v["margin_rate"]),
+                "margin_rate": float(margin) if margin is not None else 0.12,
                 "sector": plates.get(code, "unknown"),
             })
         return pd.DataFrame(rows).set_index("code")
@@ -97,14 +106,37 @@ class FuyaoProvider(DataProvider):
 
     # ---------------- assembly ----------------
     def _sina_kline(self, symbol: str) -> pd.DataFrame:
-        """Per-contract daily OHLCV from sina via akshare - serves DELISTED
-        contracts with their true listed window (fuyao only serves live)."""
-        import akshare as ak
-        df = ak.futures_zh_daily_sina(symbol=symbol)
-        df = df[["date", "close", "volume"]].copy()
-        df["date"] = df["date"].astype(str)
-        df["close"] = pd.to_numeric(df["close"], errors="coerce")
-        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        """Per-contract daily close/volume from the sina direct API.
+
+        4-digit symbols (RB2310, AP2401, SC2311...) work for ALL exchanges
+        INCLUDING delisted CZCE contracts (akshare's 3-digit wrapper does
+        not). Serves the true listed window of delisted contracts."""
+        import urllib.request
+        url = (f"https://stock2.finance.sina.com.cn/futures/api/jsonp.php/"
+               f"var%20t=/InnerFuturesNewService.getDailyKLine?symbol={symbol}")
+        raw = None
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                raw = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore")
+                break
+            except Exception:
+                if attempt == 2:
+                    return pd.DataFrame(columns=["date", "close", "volume"])
+                time.sleep(1.0 + attempt)
+        if raw is None or "(" not in raw or ")" not in raw:
+            return pd.DataFrame(columns=["date", "close", "volume"])
+        body = raw[raw.find("(") + 1: raw.rfind(")")]
+        try:
+            d = json.loads(body)
+        except Exception:
+            return pd.DataFrame(columns=["date", "close", "volume"])
+        if not d:
+            return pd.DataFrame(columns=["date", "close", "volume"])
+        df = pd.DataFrame([{"date": str(r.get("d"))[:10],
+                            "close": pd.to_numeric(r.get("c"), errors="coerce"),
+                            "volume": pd.to_numeric(r.get("v"), errors="coerce")}
+                           for r in d])
         return df.dropna()
 
     def _live_contract_info(self) -> pd.DataFrame:
@@ -120,11 +152,17 @@ class FuyaoProvider(DataProvider):
             if not d["item"] or offset >= total:
                 break
             time.sleep(self.sleep_s)
+        wanted = None if self.varieties is None else set(self.varieties)
         rows = []
         for it in items:
             code = it.get("variety_code")
             ticker = it.get("ticker") or ""
-            if code in self.varieties and _TICKER_RE.match(ticker):
+            exch = it.get("exchange_code") or ""
+            if exch == "CFFEX":
+                continue                       # user scope: commodity futures
+            if wanted is not None and code not in wanted:
+                continue
+            if _TICKER_RE.match(ticker):
                 rows.append({"code": code, "contract_id": ticker})
         return pd.DataFrame(rows)
 
@@ -197,10 +235,11 @@ class FuyaoProvider(DataProvider):
         # contracts expiring beyond the panel: searchsorted clamps them to
         # len(days), which collapses their tau to ~1 day and excludes them
         # from dominance at the tail -> extrapolate trading days instead
-        last_day = np.datetime64(days[-1])
-        exp64 = keep["expiry_date"].values.astype("datetime64[D]")
+        last_day = np.datetime64(str(days[-1])[:10])
+        exp64 = np.array([str(x)[:10] for x in keep["expiry_date"].values],
+                         dtype="datetime64[D]")
         beyond = exp64 > last_day
-        extra = np.busday_count(last_day, exp64)
+        extra = np.busday_count(last_day, np.minimum(exp64, last_day + np.timedelta64(500, "D")))
         pos = np.where(beyond, (len(days) - 1) + np.maximum(extra, 1), pos)
         keep["expiry_day"] = pos
         keep = keep[["code", "contract_id", "expiry_day", "expiry_date"]]

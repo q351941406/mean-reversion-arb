@@ -49,6 +49,7 @@ export FUYAO_API_KEY=sk-...   # .env 亦可, 已 gitignore
 | [08 · 第一次真实数据运行](docs/08-first-real-run.md) | fuyao+新浪混合源、真实数据 5 个坑、发现层命中经典价差、OOS 负结果的诚实记录 |
 | [09 · 小资金纯跨期账本](docs/09-small-account.md) | 一手交易的账本设计(`--book calendar`)、真实面板 +6.5%/回撤-3.7%、一手实务账、纸面跟踪建议 |
 | [10 · 优化循环](docs/10-optimization-loop.md) | μ漂移合成器v3、沙盘海选不迁移的负结果、账本扩容22品种(+6.8%/回撤-2.3%、WF 4/4折正) |
+| [11 · 全商品市场研究](docs/11-full-market.md) | 83品种全市场面板(1636天×3854合约)、六板块跨期价差自动发现、双窗口 Sharpe 1.97/1.13 |
 
 ## 文献依据(arXiv)
 
