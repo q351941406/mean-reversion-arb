@@ -75,6 +75,10 @@ class FuturesConfig:
                                     # ~= 4.8e-4. 0 = v2 behavior (constant mu).
     basis_mu_drift_hl: float = 0.0  # half-life (days) of the drift as an OU process
                                     # (autocorrelation calibration; 0 = random walk)
+    spread_margin_discount: float = 0.0
+    # Exchange margin benefit for same-commodity calendar spreads (SHFE/DCE
+    # charge spread risk, not both legs in full). 0.5 = charge half. VERIFY
+    # the current exchange schedule before relying on this number.
     vol_floor_liq: float = 3.0e4   # liquidity floor: avg daily lots of the thin leg
     frac_structural: float = 0.3
     n_planted_cross: int = 3
@@ -902,8 +906,11 @@ def backtest_slot(u: FuturesUniverse, slot: SpreadSlot, params: StratParams,
             pnl[t] -= cost_mult * roll_cost[t]   # fees paid to roll the book
         prev = p
         if p != 0 and all(np.isfinite(px[t]) for px in pxs):
-            margin_series[t] = sum(leg.lots * leg.mult * pxs[i][t] * u.specs[leg.com].margin_rate
-                                   for i, leg in enumerate(slot.legs)) / max(1.0, slot.cap)
+            mg = sum(leg.lots * leg.mult * pxs[i][t] * u.specs[leg.com].margin_rate
+                     for i, leg in enumerate(slot.legs))
+            if slot.kind == "cal" and u.cfg.spread_margin_discount > 0:
+                mg *= (1.0 - u.cfg.spread_margin_discount)
+            margin_series[t] = mg / max(1.0, slot.cap)
 
     held = np.zeros(T, dtype=bool)
     held[1:] = pos[:-1] != 0

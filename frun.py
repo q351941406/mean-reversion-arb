@@ -77,7 +77,8 @@ def make_params(**kw) -> StratParams:
 
 
 def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: int,
-                   cost_mult: float = 1.0):
+                   cost_mult: float = 1.0, vol_cap: float = None,
+                   margin_budget: float = None, lev_cap: float = None):
     """Backtest all slots unlevered, then the portfolio layer:
 
     1. margin-budget x utilization leverage + per-slot vol cap (train est.):
@@ -99,6 +100,9 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
         infos.append(info)
         n_trades_train += trade_stats(pos, ret, end=train_end)["n_trades"]
 
+    vol_cap = VOL_CAP if vol_cap is None else vol_cap
+    margin_budget = MARGIN_BUDGET if margin_budget is None else margin_budget
+    lev_cap_v = LEV_CAP if lev_cap is None else lev_cap
     n = len(slots)
     caps = np.array([s.cap for s in slots], dtype=float)
     w = caps / caps.sum()          # capital weights (slot capital = its 1-lot notional)
@@ -110,16 +114,16 @@ def eval_portfolio(u: FuturesUniverse, slots, params: StratParams, train_end: in
         util = float(held[tr].mean())
         m = float(ms[tr][held[tr]].mean()) if held[tr].any() else np.nan
         # margin-budget share in CAPITAL terms: w_i * lev_i * m_i * u_i = BUDGET/n
-        lev_budget = min(LEV_CAP, (MARGIN_BUDGET / n) / (w[len(levs)] * m * util)) \
+        lev_budget = min(lev_cap_v, (margin_budget / n) / (w[len(levs)] * m * util)) \
             if np.isfinite(m) and m > 0 and util > 0 else 1.0
         # risk cap: slot capital vol (annualized, train-estimated) <= VOL_CAP
         sig = float(unlevered[len(levs)].iloc[:train_end].std(ddof=1) * np.sqrt(252))
-        lev_vol = VOL_CAP / sig if sig > 0 else LEV_CAP
+        lev_vol = vol_cap / sig if sig > 0 else lev_cap_v
         levs.append(min(lev_budget, lev_vol))
 
     # per-commodity net exposure cap (train maxima only, PIT)
     scales, net_rep = enforce_net_cap(u, slots, positions, levs,
-                                      NET_CAP_FRAC, train_end)
+                                      margin_budget, train_end)
     keep = [i for i, sc in enumerate(scales) if sc > 0]
     slots_k = [slots[i] for i in keep]
     positions_k = [positions[i] for i in keep]
@@ -196,7 +200,9 @@ def true_count(slots) -> int:
 
 
 def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
-                 book: str = "all"):
+                 book: str = "all", vol_cap: float = None,
+                 margin_budget: float = None, max_notional: float = None,
+                 lev_cap: float = None):
     provider = provider or SyntheticProvider(cfg)
     ds = provider.load_dataset()
     if getattr(provider, "name", "synthetic") != "synthetic":
@@ -224,6 +230,11 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     slots, rows = screen_candidates(u, train_end)
     if book == "calendar":
         slots = [s for s in slots if s.kind == "cal"]
+    if max_notional:
+        # small-account affordability: every leg's 1-lot notional must fit
+        slots = [s for s in slots
+                 if max(lg.lots * lg.mult * (s.cap / max(1, len(s.legs)))
+                        for lg in s.legs) <= max_notional]
 
     if verbose:
         n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
@@ -281,7 +292,10 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     best_sharpe, best_params, best_port_train = -np.inf, None, None
     for g in GRID:
         p = make_params(**g)
-        _port, _ps, m_tr, _te, n_tr, _acct = eval_portfolio(u, slots, p, train_end)
+        _port, _ps, m_tr, _te, n_tr, _acct = eval_portfolio(u, slots, p, train_end,
+                                                              vol_cap=vol_cap,
+                                                              margin_budget=margin_budget,
+                                                              lev_cap=lev_cap)
         tune_rows.append({**g, "IS_sharpe": round(m_tr["sharpe"], 2), "trades": n_tr})
         if n_tr >= 15 and np.isfinite(m_tr["sharpe"]) and m_tr["sharpe"] > best_sharpe:
             best_sharpe, best_params = m_tr["sharpe"], p
@@ -291,7 +305,9 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     results = {"universe": u, "slots": slots, "train_end": train_end,
                "strategies": {}, "metrics": [], "chosen_params": best_params}
     for name in ("rolling", "ou", "ou_opt", "auto", "ou_tuned"):
-        port, per_slot, m_tr, m_te, _n, acct = eval_portfolio(u, slots, strategies[name], train_end)
+        port, per_slot, m_tr, m_te, _n, acct = eval_portfolio(u, slots, strategies[name], train_end,
+                                                                 vol_cap=vol_cap, margin_budget=margin_budget,
+                                                                 lev_cap=lev_cap)
         results["strategies"][name] = {"params": strategies[name], "port": port,
                                        "per_slot": per_slot, "m_tr": m_tr, "m_te": m_te,
                                        "acct": acct}
@@ -548,7 +564,8 @@ def run_sweep(args):
 
 
 def make_provider(args):
-    cfg = FuturesConfig(seed=args.seed, n_days=args.days)
+    cfg = FuturesConfig(seed=args.seed, n_days=args.days,
+                        spread_margin_discount=args.spread_margin_discount)
     if args.provider == "synthetic":
         return SyntheticProvider(cfg)
     if args.provider == "csv":
@@ -656,6 +673,16 @@ def main():
                     help="sample start date for --provider fuyao")
     ap.add_argument("--refresh", action="store_true",
                     help="fuyao provider: re-download even if cache exists")
+    ap.add_argument("--vol-cap", type=float, default=0.15,
+                    help="per-slot capital vol cap (annualized; return/dd scale with it)")
+    ap.add_argument("--margin-budget", type=float, default=0.90)
+    ap.add_argument("--max-notional", type=float, default=0,
+                    help="affordability filter: max 1-lot notional per leg (CNY); 0 = off")
+    ap.add_argument("--lev-cap", type=float, default=5.0,
+                    help="per-slot notional leverage cap")
+    ap.add_argument("--spread-margin-discount", type=float, default=0.0,
+                    help="exchange margin benefit for calendar spreads (0.5 = half); "
+                         "VERIFY current exchange schedule")
     ap.add_argument("--book", choices=["all", "calendar"], default="all",
                     help="calendar = small-account book: 1:1-hedged calendar "
                          "spreads only, no liquidity gate, fast hl range")
@@ -704,7 +731,9 @@ def main():
         return
 
     cfg = FuturesConfig(seed=args.seed, n_days=args.days)
-    res = run_pipeline(cfg, provider=make_provider(args), book=args.book)
+    res = run_pipeline(cfg, provider=make_provider(args), book=args.book,
+                       vol_cap=args.vol_cap, margin_budget=args.margin_budget,
+                       max_notional=args.max_notional, lev_cap=args.lev_cap)
     report_slots(res)
     if not args.no_plots:
         plot_term_structure(res, args.outdir)
