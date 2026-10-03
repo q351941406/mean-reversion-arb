@@ -258,8 +258,10 @@ def run_pipeline(cfg: FuturesConfig, verbose: bool = True, provider=None,
     lots_list = None
     if equity:
         from mrarb.futures import slot_positions as _sp  # noqa
-        lots_list, lots_rep = size_integer_lots(u, slots, equity, margin_budget,
-                                                broker_markup_pp, spread_discount)
+        lots_list, lots_rep = size_integer_lots(
+            u, slots, equity, margin_budget, broker_markup_pp, spread_discount,
+            vol_cap=vol_cap,
+            params=StratParams(mode="rolling", window=20, z_entry=1.25, z_exit=0.5))
 
     if verbose:
         n_rolls = [int(u.roll_days[c].sum()) for c in range(u.n_com)]
@@ -591,13 +593,16 @@ def run_sweep(args):
 
 
 def size_integer_lots(u, slots, equity: float, margin_budget: float,
-                      broker_markup_pp: float, discount: float):
+                      broker_markup_pp: float, discount: float,
+                      vol_cap: float = 0.15, params: StratParams = None):
     """Account-level INTEGER-lot sizing with FIXED exchange margin rates.
 
     国内期货的杠杆不是旋钮: 保证金率由交易所+期货公司固定(fuyao 已取),
     交易者只控制手数(整数), 受账户权益硬约束。按筛选排名贪心分配保证金
     预算; 买不起 1 手的槽位直接弃(小账户的真实摩擦)。
     Returns (lots list, report)."""
+    params = params or StratParams(mode="rolling", window=20, z_entry=1.25, z_exit=0.5)
+    vol_budget_cny = vol_cap * equity            # per-slot ann vol budget (CNY)
     remaining = equity * margin_budget
     tt = np.arange(u.n_days)
     lots, used, dropped, skipped = [], 0.0, 0, 0
@@ -612,7 +617,13 @@ def size_integer_lots(u, slots, equity: float, margin_budget: float,
                 mp += rate * lg.mult * p_bar
         if s.kind == "cal" and discount > 0:
             mp *= (1.0 - discount)
-        n = int(remaining // mp) if (np.isfinite(mp) and mp > 0) else 0
+        # vol-target lots: slot 1-lot ann vol (CNY) from an unlevered pass
+        ret1, _p1, _i1 = backtest_slot(u, s, params, margin_target=None)
+        sig1 = float(ret1.iloc[:max(2, int(u.n_days * 0.6))].std(ddof=1)
+                     * np.sqrt(252) * s.cap)          # CNY ann vol per 1 lot
+        n_vol = int(vol_budget_cny / sig1) if sig1 > 0 else 0
+        n_margin = int(remaining // mp) if (np.isfinite(mp) and mp > 0) else 0
+        n = max(0, min(n_vol, n_margin))
         if n < 1:
             lots.append(0)
             skipped += 1
