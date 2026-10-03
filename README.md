@@ -136,6 +136,18 @@ stats = perf_stats(portfolio_return(rets).iloc[train_end:])
 - OU 最优进出阈值有解析解(stochastic control,见 2111.02834 与 ArbitrageLab 的 optimal-mean-reversion 模块),可替换固定 z 阈值。
 - 深度生成模型升级:拿到少量真实数据后,用 TimeGAN/扩散模型扩增再做本管道的全部实验。
 
+## 数据面板
+
+`data/` 中的 Parquet 面板已随仓库分发(共 28MB),可直接 `--provider parquet` 复现全部真实数据实验,无需 API key:
+
+| 目录 | 内容 |
+|---|---|
+| `data/market_full/` | 全商品市场:83 品种 × 3854 分月合约 × 1636 天(2020-01 → 2026-10) |
+| `data/fuyao_ext/` | 22 品种 × 744 合约 × 849 天(设计期面板) |
+| `data/fuyao/`、`data/fuyao_holdout/` | 12 品种设计期 / 20-23 holdout 面板 |
+
+数据来源:同花顺 fuyao API(规格/板块/合约目录)+ 新浪财经(分月合约历史),仅供研究使用,版权归原始数据方;每日增量更新请配 `FUYAO_API_KEY` 运行 `--provider fuyao --refresh`。
+
 ## 目录结构
 
 ```
